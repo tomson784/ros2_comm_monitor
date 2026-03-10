@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ROS 2 Topic Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="title-block">
+      <h1>ROS 2 Topic Monitor</h1>
+      <p class="subtitle">SerializedMessage-Based Topic / Chart / Graph Dashboard</p>
+    </div>
+
+    <div class="top-stats">
+      <div class="mini-stat">
+        <span class="mini-label">Last Update</span>
+        <span class="mini-value" id="generatedAt">-</span>
+      </div>
+      <div class="mini-stat">
+        <span class="mini-label">Topics</span>
+        <span class="mini-value" id="topicCount">0</span>
+      </div>
+      <div class="mini-stat">
+        <span class="mini-label">Alive</span>
+        <span class="mini-value ok" id="aliveCount">0</span>
+      </div>
+      <div class="mini-stat">
+        <span class="mini-label">Stale / Down</span>
+        <span class="mini-value bad" id="badCount">0</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="card controls">
+      <div class="control-grid">
+        <label>
+          <span>Filter</span>
+          <input id="filterInput" type="text" placeholder="topic name / type" />
+        </label>
+
+        <label>
+          <span>Sort</span>
+          <select id="sortKey">
+            <option value="name">Name</option>
+            <option value="hz">Hz</option>
+            <option value="bandwidth_mib_per_sec">Bandwidth</option>
+            <option value="latest_message_size_mib">Message Size</option>
+            <option value="age_sec">Age</option>
+            <option value="publisher_count">Publishers</option>
+            <option value="subscriber_count">Subscribers</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Order</span>
+          <select id="sortOrder">
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Refresh</span>
+          <select id="refreshMs">
+            <option value="500">0.5s</option>
+            <option value="1000" selected>1s</option>
+            <option value="2000">2s</option>
+            <option value="5000">5s</option>
+          </select>
+        </label>
+
+        <label class="checkbox-wrap">
+          <span>Unhealthy Only</span>
+          <div class="checkbox-row">
+            <input id="unhealthyOnly" type="checkbox" />
+            <span>Show only stale/down topics</span>
+          </div>
+        </label>
+      </div>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="topics">Topics</button>
+      <button class="tab" data-tab="charts">Charts</button>
+      <button class="tab" data-tab="graph">Graph</button>
+    </nav>
+
+    <section id="topics" class="panel active">
+      <div class="summary-grid">
+        <article class="card summary-card">
+          <h2>Total Bandwidth</h2>
+          <div id="totalBandwidth" class="summary-value">0.00 MiB/s</div>
+        </article>
+        <article class="card summary-card">
+          <h2>Top Topic</h2>
+          <div id="topTopic" class="summary-value small">-</div>
+        </article>
+        <article class="card summary-card">
+          <h2>Highest Hz</h2>
+          <div id="topHzTopic" class="summary-value small">-</div>
+        </article>
+      </div>
+
+      <div class="card table-card">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Topic</th>
+                <th>Type</th>
+                <th>Hz</th>
+                <th>Bandwidth (MiB/s)</th>
+                <th>Size (MiB)</th>
+                <th>Pub</th>
+                <th>Sub</th>
+                <th>Msgs</th>
+                <th>Age (s)</th>
+              </tr>
+            </thead>
+            <tbody id="topicsBody">
+              <tr><td colspan="10" class="empty-cell">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="charts" class="panel">
+      <div class="chart-grid">
+        <div class="card chart-card">
+          <div class="chart-header">
+            <h2>Hz Timeline</h2>
+          </div>
+          <canvas id="hzChart"></canvas>
+        </div>
+
+        <div class="card chart-card">
+          <div class="chart-header">
+            <h2>Bandwidth Timeline</h2>
+          </div>
+          <canvas id="bwChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section id="graph" class="panel">
+      <div class="card graph-card">
+        <div class="graph-toolbar">
+          <div class="legend">
+            <span><i class="dot ok"></i> OK</span>
+            <span><i class="dot warn"></i> STALE</span>
+            <span><i class="dot bad"></i> DOWN</span>
+          </div>
+          <button id="graphRefreshBtn" class="graph-refresh-btn" type="button">Refresh Graph</button>
+          <div class="graph-note-row">
+            <div class="graph-note">rqt_graph style: host → namespace → node(namespace/name) → topic → node(namespace/name)</div>
+            <div id="graphCounts">0 nodes / 0 edges</div>
+          </div>
+        </div>
+        <div class="graph-main">
+          <div id="graphCanvas"></div>
+          <aside class="graph-detail">
+            <h3>Node Detail</h3>
+            <div id="graphDetailBody" class="graph-detail-body">Click a node to view details.</div>
+          </aside>
+        </div>
+        <div id="graphHoverInfo" class="graph-hover"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

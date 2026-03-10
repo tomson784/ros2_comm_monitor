@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>serialized_topic_monitor</name>
+  <version>1.0.0</version>
+  <description>ROS 2 serialized topic monitor backend for web UI.</description>
+  <maintainer email="tomohitokawabe@gmail.com">tomson784</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

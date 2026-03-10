@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>topic_monitor_web_server</name>
+  <version>1.0.0</version>
+  <description>ROS 2 web server for browser-based topic monitor UI.</description>
+  <maintainer email="tomohitokawabe@gmail.com">tomson784</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
