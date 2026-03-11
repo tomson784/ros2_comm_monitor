@@ -1,5 +1,8 @@
 # serialized_topic_monitor
 
+[![ROS 2 CI (Humble)](https://img.shields.io/github/actions/workflow/status/tomson784/ros2_comm_monitor/ci.yml?branch=main&label=ROS%202%20CI%20%28Humble%29)](https://github.com/tomson784/ros2_comm_monitor/actions/workflows/ci.yml)
+[![ROS 2 CI (Jazzy)](https://img.shields.io/github/actions/workflow/status/tomson784/ros2_comm_monitor/ci.yml?branch=main&label=ROS%202%20CI%20%28Jazzy%29)](https://github.com/tomson784/ros2_comm_monitor/actions/workflows/ci.yml)
+
 `rclcpp::SerializedMessage` を使って、メッセージを deserialize せずに ROS 2 トピックの
 通信状態を監視し、Web/UI 向けの JSON を publish する C++ ノードです。
 
@@ -16,6 +19,23 @@
 - ノード/トピック/QoS 情報を含むグラフ JSON を生成
 
 同一リポジトリ内の `topic_monitor_web_server` と組み合わせて使う想定です。
+
+CI は `main` ブランチに対して ROS 2 Humble / Jazzy の matrix build を実行します。
+現在の構成では 2 つのバッジは同じ matrix workflow を参照し、どちらかが失敗すると workflow 全体が失敗表示になります。
+
+## ダッシュボード画面
+
+### Topic Monitor
+
+![Topic monitor dashboard](./docs/topic_dashboard.png)
+
+### Chart Monitor
+
+![Chart monitor dashboard](./docs/chart_dashborad.png)
+
+### Graph Monitor
+
+![Graph monitor dashboard](./docs/graph_dashborad.png)
 
 ## 特徴
 
@@ -127,7 +147,7 @@
 ワークスペースルートで実行:
 
 ```bash
-colcon build --packages-select serialized_topic_monitor
+colcon build --packages-select serialized_topic_monitor topic_monitor_web_server
 source install/setup.bash
 ```
 
@@ -153,10 +173,57 @@ ros2 run serialized_topic_monitor serialized_topic_monitor_node --ros-args \
   -p graph_topic:='/topic_monitor/graph_json'
 ```
 
+## Web Server の使い方
+
+`topic_monitor_web_server` は `serialized_topic_monitor` が publish する JSON を
+subscribe し、ブラウザ UI と HTTP API を提供します。
+
+まずバックエンド監視ノードを起動します:
+
+```bash
+ros2 run serialized_topic_monitor serialized_topic_monitor_node
+```
+
+別ターミナルで Web サーバを起動します:
+
+```bash
+source install/setup.bash
+ros2 run topic_monitor_web_server topic_monitor_web_server
+```
+
+ブラウザで以下にアクセスします:
+
+```text
+http://localhost:8080
+```
+
+利用できるパラメータ:
+
+- `host`（`string`、既定: `0.0.0.0`）
+- `port`（`int`、既定: `8080`）
+- `stats_topic`（`string`、既定: `/topic_monitor/stats_json`）
+- `graph_topic`（`string`、既定: `/topic_monitor/graph_json`）
+
+ポート番号やトピック名を変える例:
+
+```bash
+ros2 run topic_monitor_web_server topic_monitor_web_server --ros-args \
+  -p host:='0.0.0.0' \
+  -p port:=8081 \
+  -p stats_topic:='/topic_monitor/stats_json' \
+  -p graph_topic:='/topic_monitor/graph_json'
+```
+
+HTTP エンドポイント:
+
+- `/` または `/index.html`: ブラウザ UI
+- `/api/stats`: 最新の stats JSON
+- `/api/graph`: 最新の graph JSON
+
 ## テスト
 
 ```bash
-colcon test --packages-select serialized_topic_monitor
+colcon test --packages-select serialized_topic_monitor topic_monitor_web_server
 colcon test-result --verbose
 ```
 

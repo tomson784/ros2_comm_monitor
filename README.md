@@ -1,5 +1,8 @@
 # serialized_topic_monitor
 
+[![ROS 2 CI (Humble)](https://img.shields.io/github/actions/workflow/status/tomson784/ros2_comm_monitor/ci.yml?branch=main&label=ROS%202%20CI%20%28Humble%29)](https://github.com/tomson784/ros2_comm_monitor/actions/workflows/ci.yml)
+[![ROS 2 CI (Jazzy)](https://img.shields.io/github/actions/workflow/status/tomson784/ros2_comm_monitor/ci.yml?branch=main&label=ROS%202%20CI%20%28Jazzy%29)](https://github.com/tomson784/ros2_comm_monitor/actions/workflows/ci.yml)
+
 ROS 2 C++ monitor node that observes topic activity using `rclcpp::SerializedMessage`
 without deserializing message payloads, then publishes JSON for web/dashboard consumers.
 
@@ -17,6 +20,23 @@ without deserializing message payloads, then publishes JSON for web/dashboard co
 
 This package is the backend monitor component used by the sibling package
 `topic_monitor_web_server`.
+
+The CI workflow runs a matrix build for both ROS 2 Humble and Jazzy on `main`.
+Each badge points to the same matrix workflow, so a failure in either distro marks the workflow failed.
+
+## Dashboard Screenshots
+
+### Topic Monitor
+
+![Topic monitor dashboard](./docs/topic_dashboard.png)
+
+### Chart Monitor
+
+![Chart monitor dashboard](./docs/chart_dashborad.png)
+
+### Graph Monitor
+
+![Graph monitor dashboard](./docs/graph_dashborad.png)
 
 ## Features
 
@@ -128,7 +148,7 @@ Main fields:
 From your ROS 2 workspace root:
 
 ```bash
-colcon build --packages-select serialized_topic_monitor
+colcon build --packages-select serialized_topic_monitor topic_monitor_web_server
 source install/setup.bash
 ```
 
@@ -154,10 +174,57 @@ ros2 run serialized_topic_monitor serialized_topic_monitor_node --ros-args \
   -p graph_topic:='/topic_monitor/graph_json'
 ```
 
+## Web Server
+
+`topic_monitor_web_server` subscribes to the JSON topics from
+`serialized_topic_monitor` and serves a browser UI plus simple HTTP APIs.
+
+Start the backend monitor first:
+
+```bash
+ros2 run serialized_topic_monitor serialized_topic_monitor_node
+```
+
+Start the web server in another terminal:
+
+```bash
+source install/setup.bash
+ros2 run topic_monitor_web_server topic_monitor_web_server
+```
+
+Open the UI in your browser:
+
+```text
+http://localhost:8080
+```
+
+Available parameters:
+
+- `host` (`string`, default: `0.0.0.0`)
+- `port` (`int`, default: `8080`)
+- `stats_topic` (`string`, default: `/topic_monitor/stats_json`)
+- `graph_topic` (`string`, default: `/topic_monitor/graph_json`)
+
+Example with custom port and topic names:
+
+```bash
+ros2 run topic_monitor_web_server topic_monitor_web_server --ros-args \
+  -p host:='0.0.0.0' \
+  -p port:=8081 \
+  -p stats_topic:='/topic_monitor/stats_json' \
+  -p graph_topic:='/topic_monitor/graph_json'
+```
+
+HTTP endpoints:
+
+- `/` or `/index.html`: browser UI
+- `/api/stats`: latest stats JSON
+- `/api/graph`: latest graph JSON
+
 ## Test
 
 ```bash
-colcon test --packages-select serialized_topic_monitor
+colcon test --packages-select serialized_topic_monitor topic_monitor_web_server
 colcon test-result --verbose
 ```
 
