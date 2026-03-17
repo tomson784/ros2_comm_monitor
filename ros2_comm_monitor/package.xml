@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ros2_comm_monitor</name>
+  <version>1.0.0</version>
+  <description>Bringup package for the ROS 2 communication monitor stack.</description>
+  <maintainer email="tomohitokawabe@gmail.com">tomson784</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>serialized_topic_monitor</exec_depend>
+  <exec_depend>topic_monitor_web_server</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

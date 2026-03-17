@@ -148,7 +148,7 @@ Main fields:
 From your ROS 2 workspace root:
 
 ```bash
-colcon build --packages-select serialized_topic_monitor topic_monitor_web_server
+colcon build --packages-select serialized_topic_monitor topic_monitor_web_server ros2_comm_monitor
 source install/setup.bash
 ```
 
@@ -179,16 +179,16 @@ ros2 run serialized_topic_monitor serialized_topic_monitor_node --ros-args \
 `topic_monitor_web_server` subscribes to the JSON topics from
 `serialized_topic_monitor` and serves a browser UI plus simple HTTP APIs.
 
-Start the backend monitor first:
+Start both nodes together:
+
+```bash
+ros2 launch ros2_comm_monitor bringup.launch.py
+```
+
+You can still start them separately if needed:
 
 ```bash
 ros2 run serialized_topic_monitor serialized_topic_monitor_node
-```
-
-Start the web server in another terminal:
-
-```bash
-source install/setup.bash
 ros2 run topic_monitor_web_server topic_monitor_web_server
 ```
 
@@ -208,11 +208,10 @@ Available parameters:
 Example with custom port and topic names:
 
 ```bash
-ros2 run topic_monitor_web_server topic_monitor_web_server --ros-args \
-  -p host:='0.0.0.0' \
-  -p port:=8081 \
-  -p stats_topic:='/topic_monitor/stats_json' \
-  -p graph_topic:='/topic_monitor/graph_json'
+ros2 launch ros2_comm_monitor bringup.launch.py \
+  port:=8081 \
+  stats_topic:=/topic_monitor/stats_json \
+  graph_topic:=/topic_monitor/graph_json
 ```
 
 HTTP endpoints:

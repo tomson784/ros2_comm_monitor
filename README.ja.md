@@ -147,7 +147,7 @@ CI は `main` ブランチに対して ROS 2 Humble / Jazzy の matrix build を
 ワークスペースルートで実行:
 
 ```bash
-colcon build --packages-select serialized_topic_monitor topic_monitor_web_server
+colcon build --packages-select serialized_topic_monitor topic_monitor_web_server ros2_comm_monitor
 source install/setup.bash
 ```
 
@@ -178,16 +178,16 @@ ros2 run serialized_topic_monitor serialized_topic_monitor_node --ros-args \
 `topic_monitor_web_server` は `serialized_topic_monitor` が publish する JSON を
 subscribe し、ブラウザ UI と HTTP API を提供します。
 
-まずバックエンド監視ノードを起動します:
+まとめて起動する場合:
+
+```bash
+ros2 launch ros2_comm_monitor bringup.launch.py
+```
+
+必要なら個別起動もできます:
 
 ```bash
 ros2 run serialized_topic_monitor serialized_topic_monitor_node
-```
-
-別ターミナルで Web サーバを起動します:
-
-```bash
-source install/setup.bash
 ros2 run topic_monitor_web_server topic_monitor_web_server
 ```
 
@@ -207,11 +207,10 @@ http://localhost:8080
 ポート番号やトピック名を変える例:
 
 ```bash
-ros2 run topic_monitor_web_server topic_monitor_web_server --ros-args \
-  -p host:='0.0.0.0' \
-  -p port:=8081 \
-  -p stats_topic:='/topic_monitor/stats_json' \
-  -p graph_topic:='/topic_monitor/graph_json'
+ros2 launch ros2_comm_monitor bringup.launch.py \
+  port:=8081 \
+  stats_topic:=/topic_monitor/stats_json \
+  graph_topic:=/topic_monitor/graph_json
 ```
 
 HTTP エンドポイント:
