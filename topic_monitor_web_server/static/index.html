@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ROS 2 Topic Monitor</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/elkjs/lib/elk.bundled.js"></script>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -157,9 +157,14 @@
             <span><i class="dot warn"></i> STALE</span>
             <span><i class="dot bad"></i> DOWN</span>
           </div>
-          <button id="graphRefreshBtn" class="graph-refresh-btn" type="button">Refresh Graph</button>
+          <div class="graph-actions">
+            <button id="graphZoomOutBtn" class="graph-refresh-btn" type="button" aria-label="Zoom out">-</button>
+            <button id="graphZoomResetBtn" class="graph-refresh-btn graph-zoom-label" type="button">100%</button>
+            <button id="graphZoomInBtn" class="graph-refresh-btn" type="button" aria-label="Zoom in">+</button>
+            <button id="graphRefreshBtn" class="graph-refresh-btn" type="button">Refresh Graph</button>
+          </div>
           <div class="graph-note-row">
-            <div class="graph-note">rqt_graph style: host → namespace → node(namespace/name) → topic → node(namespace/name)</div>
+            <div class="graph-note">rqt_graph style: host → namespace → node(namespace/name) → topic → node(namespace/name), wheel to zoom and drag to pan</div>
             <div id="graphCounts">0 nodes / 0 edges</div>
           </div>
         </div>

@@ -355,6 +355,14 @@ bool TopicHzMonitorWebNode::should_monitor_topic(const std::string & topic_name)
   return true;
 }
 
+bool TopicHzMonitorWebNode::should_include_graph_node(
+  const std::string & node_namespace,
+  const std::string & node_name) const
+{
+  (void)node_namespace;
+  return node_name != "serialized_topic_monitor_node";
+}
+
 /**
  * @brief Return true if topic is considered ROS internal/system topic.
  */
@@ -716,6 +724,10 @@ GraphData TopicHzMonitorWebNode::build_graph_data() const
 
     const auto publishers = this->get_publishers_info_by_topic(topic_name);
     for (const auto & pub : publishers) {
+      if (!should_include_graph_node(pub.node_namespace(), pub.node_name())) {
+        continue;
+      }
+
       const std::string node_fqn =
         make_node_fqn(pub.node_namespace(), pub.node_name());
       const std::string ns_id =
@@ -756,6 +768,10 @@ GraphData TopicHzMonitorWebNode::build_graph_data() const
 
     const auto subscriptions = this->get_subscriptions_info_by_topic(topic_name);
     for (const auto & sub : subscriptions) {
+      if (!should_include_graph_node(sub.node_namespace(), sub.node_name())) {
+        continue;
+      }
+
       const std::string node_fqn =
         make_node_fqn(sub.node_namespace(), sub.node_name());
       const std::string ns_id =

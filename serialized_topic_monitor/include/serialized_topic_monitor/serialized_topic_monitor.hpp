@@ -151,6 +151,9 @@ private:
   void publish_payloads();
 
   bool should_monitor_topic(const std::string & topic_name) const;
+  bool should_include_graph_node(
+    const std::string & node_namespace,
+    const std::string & node_name) const;
   bool is_internal_topic(const std::string & topic_name) const;
   bool is_hidden_topic(const std::string & topic_name) const;
 

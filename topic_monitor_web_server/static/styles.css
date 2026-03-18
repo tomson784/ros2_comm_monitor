@@ -129,6 +129,7 @@ tbody tr:hover{background:rgba(30,41,59,.45);}
   display:flex;justify-content:space-between;align-items:center;gap:16px;
   margin-bottom:12px;flex-wrap:wrap;
 }
+.graph-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .graph-refresh-btn{
   border:1px solid var(--border);
   background:var(--panel-2);
@@ -140,6 +141,7 @@ tbody tr:hover{background:rgba(30,41,59,.45);}
   cursor:pointer;
 }
 .graph-refresh-btn:hover{filter:brightness(1.1);}
+.graph-zoom-label{min-width:72px;}
 .graph-note-row{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
 .legend{display:flex;gap:14px;color:var(--muted);font-size:14px;}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;}
@@ -156,8 +158,42 @@ tbody tr:hover{background:rgba(30,41,59,.45);}
 #graphCanvas{
   flex:1;
   min-width:0;
-  height:760px;background:#020617;border-radius:16px;border:1px solid var(--border);
+  height:760px;
+  background:#020617;
+  border-radius:16px;
+  border:1px solid var(--border);
+  overflow:auto;
+  position:relative;
+  touch-action:pan-x pan-y;
+  cursor:grab;
 }
+#graphCanvas.is-dragging{cursor:grabbing;}
+.graph-svg{display:block;min-width:100%;min-height:100%;}
+.graph-group-box{fill:rgba(15,23,42,.25);stroke:#475569;stroke-width:2;}
+.graph-node-namespace .graph-group-box{fill:rgba(2,6,23,.18);stroke:#334155;stroke-width:1.5;}
+.graph-group-label{fill:#cbd5e1;font-size:15px;font-weight:700;pointer-events:none;}
+.graph-node-namespace .graph-group-label{fill:#94a3b8;font-size:12px;font-weight:600;}
+.graph-leaf-shape{stroke:#334155;stroke-width:2;cursor:pointer;}
+.graph-node-node .graph-leaf-shape{fill:#2563eb;}
+.graph-node-topic .graph-leaf-shape{stroke:#475569;}
+.graph-node-label{pointer-events:none;dominant-baseline:middle;}
+.graph-node-label-node{fill:#e5e7eb;font-size:11px;font-weight:600;}
+.graph-node-label-topic{fill:#0b1220;font-size:11px;font-weight:700;}
+.graph-edge-path{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;opacity:.92;}
+.graph-edge-reliable .graph-edge-path{stroke-width:3;}
+.graph-edge-hit{fill:none;stroke:transparent;stroke-width:14;cursor:pointer;}
+.graph-edge-label{
+  font-size:10px;
+  font-weight:700;
+  paint-order:stroke;
+  stroke:#0f172a;
+  stroke-width:4;
+  stroke-linejoin:round;
+  pointer-events:none;
+}
+.graph-node.is-selected .graph-leaf-shape,
+.graph-node.is-selected .graph-group-box{stroke:#f8fafc;stroke-width:4;}
+.graph-edge.is-selected .graph-edge-path{filter:brightness(1.15);stroke-width:4;}
 .graph-detail{
   width:360px;
   min-width:280px;
