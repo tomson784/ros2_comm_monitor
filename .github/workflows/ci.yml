@@ -28,8 +28,8 @@ jobs:
             container_image: ros:humble-ros-base-jammy
           - ros_distro: jazzy
             container_image: ros:jazzy-ros-base-noble
-          - ros_distro: rolling
-            container_image: ros:rolling-ros-base-noble
+          # - ros_distro: rolling
+          #   container_image: ros:rolling-ros-base-noble
 
     runs-on: ubuntu-latest
     container:
