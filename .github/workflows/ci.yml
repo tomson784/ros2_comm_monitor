@@ -25,36 +25,48 @@ jobs:
       matrix:
         include:
           - ros_distro: humble
-            runs_on: ubuntu-22.04
+            container_image: ros:humble-ros-base-jammy
           - ros_distro: jazzy
-            runs_on: ubuntu-24.04
-    runs-on: ${{ matrix.runs_on }}
+            container_image: ros:jazzy-ros-base-noble
+          - ros_distro: rolling
+            container_image: ros:rolling-ros-base-noble
+
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.container_image }}
+
+    defaults:
+      run:
+        shell: bash
+
     env:
       ROS_DISTRO: ${{ matrix.ros_distro }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup ROS 2
-        uses: ros-tooling/setup-ros@v0.7
-        with:
-          required-ros-distributions: ${{ env.ROS_DISTRO }}
-
-      - name: Install build tools
+      - name: Install CI tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-rosdep python3-colcon-common-extensions
-
-      - name: Install ament_python
-        run: sudo apt-get install python3-ament-package
+          set -ex
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ros-${ROS_DISTRO}-ament-cmake \
+            ros-${ROS_DISTRO}-ament-cmake-target-dependencies \
+            python3-colcon-common-extensions \
+            python3-rosdep
+          rm -rf /var/lib/apt/lists/*
 
       - name: Initialize rosdep
         run: |
-          sudo rosdep init || true
+          set -ex
+          rosdep init || true
           rosdep update --rosdistro "$ROS_DISTRO"
 
-      - name: Install dependencies
+      - name: Install package dependencies
         run: |
+          set -ex
+          source "/opt/ros/$ROS_DISTRO/setup.bash"
           rosdep install \
             --from-paths . \
             --ignore-src \
@@ -63,11 +75,13 @@ jobs:
 
       - name: Build
         run: |
+          set -ex
           source "/opt/ros/$ROS_DISTRO/setup.bash"
           colcon build --base-paths . --event-handlers console_direct+ --symlink-install
 
       - name: Test
         run: |
+          set -ex
           source "/opt/ros/$ROS_DISTRO/setup.bash"
           source install/setup.bash
           colcon test --event-handlers console_direct+
