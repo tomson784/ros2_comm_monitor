@@ -874,11 +874,21 @@ function renderGraphEdge(layer, edge, pathData) {
 
 function updateGraphSelectionClasses() {
   if (!graphCanvas) return;
+  const connectedNodeIds = new Set();
+  if (state.selectedElementType === "edge") {
+    const edge = getGraphEdge(state.selectedElementId);
+    if (edge) {
+      if (edge.source) connectedNodeIds.add(String(edge.source));
+      if (edge.target) connectedNodeIds.add(String(edge.target));
+    }
+  }
   graphCanvas.querySelectorAll("[data-node-id]").forEach((el) => {
+    const nodeId = el.getAttribute("data-node-id");
     el.classList.toggle(
       "is-selected",
-      state.selectedElementType === "node" && state.selectedElementId === el.getAttribute("data-node-id")
+      state.selectedElementType === "node" && state.selectedElementId === nodeId
     );
+    el.classList.toggle("is-edge-connected", connectedNodeIds.has(nodeId));
   });
   graphCanvas.querySelectorAll("[data-edge-id]").forEach((el) => {
     el.classList.toggle(

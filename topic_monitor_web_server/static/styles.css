@@ -192,8 +192,10 @@ tbody tr:hover{background:rgba(30,41,59,.45);}
   pointer-events:none;
 }
 .graph-node.is-selected .graph-leaf-shape,
-.graph-node.is-selected .graph-group-box{stroke:#f8fafc;stroke-width:4;}
-.graph-edge.is-selected .graph-edge-path{filter:brightness(1.15);stroke-width:4;}
+.graph-node.is-selected .graph-group-box{stroke:#22d3ee;stroke-width:4;filter:drop-shadow(0 0 6px rgba(34,211,238,.9));}
+.graph-edge.is-selected .graph-edge-path{stroke:#22d3ee;stroke-width:5;filter:drop-shadow(0 0 7px rgba(34,211,238,.9));opacity:1;}
+.graph-node.is-edge-connected .graph-leaf-shape,
+.graph-node.is-edge-connected .graph-group-box{stroke:#f97316;stroke-width:4;filter:drop-shadow(0 0 6px rgba(249,115,22,.9));}
 .graph-detail{
   width:360px;
   min-width:280px;
