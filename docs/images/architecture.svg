@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" font-family="'Noto Sans JP','Noto Sans CJK JP','Hiragino Sans','Yu Gothic','Meiryo',Inter,'Segoe UI',sans-serif" role="img" aria-label="ros2_comm_monitor architecture">
+<defs>
+  <marker id="ah-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+  <marker id="ah-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+  <marker id="ah-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+  <filter id="sh" x="-5%" y="-5%" width="110%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity=".12"/></filter>
+</defs>
+<rect x="0" y="0" width="1200" height="660" rx="18" fill="#f8fafc"/>
+<rect x="30" y="30" width="340" height="520" rx="16" fill="#eef2ff" stroke="#6366f1" stroke-width="2" filter="url(#sh)"/>
+<g transform="translate(48,46)" fill="none" stroke="#334155" stroke-width="2"><rect x="0" y="0" width="24" height="16" rx="2"/><path d="M8 21h8M12 16v5"/></g>
+<text x="82" y="62" font-size="18" font-weight="700" fill="#0f172a">PC A (master)</text>
+<rect x="90" y="66" width="220" height="62" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="200.0" y="93.0" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">User nodes</text>
+<text x="200.0" y="114.0" text-anchor="middle" font-size="12.5" fill="#475569">publish /a_chatter</text>
+<line x1="200" y1="130" x2="200" y2="196" stroke="#2563eb" stroke-width="7" marker-end="url(#ah-blue)"/>
+<text x="214" y="160" font-size="13" font-weight="700" fill="#2563eb">payloads</text>
+<text x="214" y="177" font-size="12" fill="#2563eb">(inside the PC)</text>
+<rect x="80" y="202" width="240" height="66" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+<text x="200.0" y="231.0" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">agent</text>
+<text x="200.0" y="252.0" text-anchor="middle" font-size="12.5" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">comm_monitor_agent_host_a</text>
+<text x="212" y="292" font-size="12.5" fill="#475569">this PC's topics only</text>
+<rect x="430" y="30" width="340" height="300" rx="16" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<g transform="translate(448,46)" fill="none" stroke="#334155" stroke-width="2"><rect x="0" y="0" width="24" height="16" rx="2"/><path d="M8 21h8M12 16v5"/></g>
+<text x="482" y="62" font-size="18" font-weight="700" fill="#0f172a">PC B</text>
+<rect x="490" y="66" width="220" height="62" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="600.0" y="93.0" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">User nodes</text>
+<text x="600.0" y="114.0" text-anchor="middle" font-size="12.5" fill="#475569">publish /big</text>
+<line x1="600" y1="130" x2="600" y2="196" stroke="#2563eb" stroke-width="7" marker-end="url(#ah-blue)"/>
+<text x="614" y="160" font-size="13" font-weight="700" fill="#2563eb">payloads</text>
+<text x="614" y="177" font-size="12" fill="#2563eb">(inside the PC)</text>
+<rect x="480" y="202" width="240" height="66" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+<text x="600.0" y="231.0" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">agent</text>
+<text x="600.0" y="252.0" text-anchor="middle" font-size="12.5" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">comm_monitor_agent_host_b</text>
+<text x="612" y="292" font-size="12.5" fill="#475569">this PC's topics only</text>
+<rect x="830" y="30" width="340" height="300" rx="16" fill="#ffffff" stroke="#94a3b8" stroke-width="2" filter="url(#sh)"/>
+<g transform="translate(848,46)" fill="none" stroke="#334155" stroke-width="2"><rect x="0" y="0" width="24" height="16" rx="2"/><path d="M8 21h8M12 16v5"/></g>
+<text x="882" y="62" font-size="18" font-weight="700" fill="#0f172a">PC C</text>
+<rect x="890" y="66" width="220" height="62" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="1000.0" y="93.0" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">User nodes</text>
+<text x="1000.0" y="114.0" text-anchor="middle" font-size="12.5" fill="#475569">publish /c_chatter</text>
+<line x1="1000" y1="130" x2="1000" y2="196" stroke="#2563eb" stroke-width="7" marker-end="url(#ah-blue)"/>
+<text x="1014" y="160" font-size="13" font-weight="700" fill="#2563eb">payloads</text>
+<text x="1014" y="177" font-size="12" fill="#2563eb">(inside the PC)</text>
+<rect x="880" y="202" width="240" height="66" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+<text x="1000.0" y="231.0" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">agent</text>
+<text x="1000.0" y="252.0" text-anchor="middle" font-size="12.5" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">comm_monitor_agent_host_c</text>
+<text x="1012" y="292" font-size="12.5" fill="#475569">this PC's topics only</text>
+<line x1="374" y1="97" x2="426" y2="97" stroke="#94a3b8" stroke-width="7" stroke-dasharray="6 5"/>
+<circle cx="400" cy="97" r="15" fill="#ffffff" stroke="#dc2626" stroke-width="3"/>
+<path d="M393,90 L407,104 M407,90 L393,104" stroke="#dc2626" stroke-width="3.5" stroke-linecap="round"/>
+<line x1="774" y1="97" x2="826" y2="97" stroke="#94a3b8" stroke-width="7" stroke-dasharray="6 5"/>
+<circle cx="800" cy="97" r="15" fill="#ffffff" stroke="#dc2626" stroke-width="3"/>
+<path d="M793,90 L807,104 M807,90 L793,104" stroke="#dc2626" stroke-width="3.5" stroke-linecap="round"/>
+<rect x="60" y="430" width="280" height="80" rx="12" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+<text x="200.0" y="466.0" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">web server (aggregator)</text>
+<text x="200.0" y="487.0" text-anchor="middle" font-size="12.5" fill="#475569">keeps and merges per-PC JSON</text>
+<path d="M200,268 V424" stroke="#ea580c" stroke-width="3.5" stroke-dasharray="9 6" stroke-linecap="round" fill="none" marker-end="url(#ah-orange)"/>
+<path d="M1000,268 V380 H600" stroke="#ea580c" stroke-width="3.5" stroke-dasharray="9 6" stroke-linecap="round" fill="none"/>
+<path d="M600,268 V380 H290 V424" stroke="#ea580c" stroke-width="3.5" stroke-dasharray="9 6" stroke-linecap="round" fill="none" marker-end="url(#ah-orange)"/>
+<rect x="650" y="356" width="300" height="24" rx="6" fill="#f8fafc"/>
+<text x="800" y="373" text-anchor="middle" font-size="14" font-weight="700" fill="#ea580c">stats / graph JSON (a few KiB/s)</text>
+<rect x="470" y="438" width="230" height="86" rx="12" fill="#ffffff" stroke="#334155" stroke-width="2" filter="url(#sh)"/>
+<rect x="470" y="438" width="230" height="22" rx="12" fill="#e2e8f0"/><rect x="470" y="450" width="230" height="10" fill="#e2e8f0"/>
+<circle cx="486" cy="449" r="4.5" fill="#f87171"/>
+<circle cx="500" cy="449" r="4.5" fill="#fbbf24"/>
+<circle cx="514" cy="449" r="4.5" fill="#34d399"/>
+<text x="585" y="488" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">Browser</text>
+<text x="585" y="509" text-anchor="middle" font-size="12.5" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">http://&lt;master&gt;:8080</text>
+<line x1="342" y1="481" x2="464" y2="481" stroke="#334155" stroke-width="3" marker-end="url(#ah-slate)"/>
+<text x="585" y="548" text-anchor="middle" font-size="12.5" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">/api/stats · /api/graph · /api/hosts</text>
+<rect x="760" y="420" width="410" height="130" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#sh)"/>
+<text x="780" y="448" font-size="15" font-weight="700" fill="#0f172a">Effect (measured with Docker)</text>
+<text x="780" y="470" font-size="12.5" fill="#475569">PC B publishes 200 KiB x 10 Hz;</text>
+<text x="780" y="487" font-size="12.5" fill="#475569">traffic received by the master:</text>
+<text x="780" y="514" font-size="14" fill="#0f172a">auto (distributed)</text>
+<text x="1150" y="514" text-anchor="end" font-size="16" font-weight="700" fill="#16a34a">~14 KiB/s</text>
+<text x="780" y="538" font-size="14" fill="#0f172a">all (subscribe to all)</text>
+<text x="1150" y="538" text-anchor="end" font-size="16" font-weight="700" fill="#dc2626">~2.06 MiB/s</text>
+<line x1="40" y1="610" x2="90" y2="610" stroke="#2563eb" stroke-width="7"/>
+<text x="100" y="615" font-size="14" fill="#0f172a">payloads (inside the PC)</text>
+<line x1="330" y1="610" x2="380" y2="610" stroke="#ea580c" stroke-width="3.5" stroke-dasharray="9 6"/>
+<text x="390" y="615" font-size="14" fill="#0f172a">statistics JSON (a few KiB/s)</text>
+<line x1="660" y1="610" x2="710" y2="610" stroke="#334155" stroke-width="3"/>
+<text x="720" y="615" font-size="14" fill="#0f172a">HTTP (UI / API)</text>
+<circle cx="930" cy="610" r="11" fill="#ffffff" stroke="#dc2626" stroke-width="2.5"/>
+<path d="M925,605 L935,615 M935,605 L925,615" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+<text x="950" y="615" font-size="14" fill="#0f172a">never crosses PCs</text>
+</svg>

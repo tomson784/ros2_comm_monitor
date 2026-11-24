@@ -20,6 +20,7 @@ include_directories(include)
 add_executable(serialized_topic_monitor_node
   src/main.cpp
   src/serialized_topic_monitor.cpp
+  src/locality.cpp
 )
 
 ament_target_dependencies(serialized_topic_monitor_node
@@ -40,6 +41,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_sliding_window_estimator
     test/test_sliding_window_estimator.cpp
     src/serialized_topic_monitor.cpp
+    src/locality.cpp
   )
   if(TARGET test_sliding_window_estimator)
     target_include_directories(test_sliding_window_estimator PRIVATE include)
@@ -47,6 +49,15 @@ if(BUILD_TESTING)
       rclcpp
       std_msgs
     )
+  endif()
+
+  # Pure-logic test: no ROS context needed.
+  ament_add_gtest(test_locality
+    test/test_locality.cpp
+    src/locality.cpp
+  )
+  if(TARGET test_locality)
+    target_include_directories(test_locality PRIVATE include)
   endif()
 endif()
 

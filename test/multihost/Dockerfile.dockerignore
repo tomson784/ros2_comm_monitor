@@ -1,0 +1,9 @@
+# BuildKit uses this file (next to the Dockerfile) instead of <context>/.dockerignore.
+.git
+.github
+docs
+**/build
+**/install
+**/log
+**/__pycache__
+test/multihost/results

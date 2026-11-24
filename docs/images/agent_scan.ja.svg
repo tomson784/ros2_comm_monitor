@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" font-family="'Noto Sans JP','Noto Sans CJK JP','Hiragino Sans','Yu Gothic','Meiryo',Inter,'Segoe UI',sans-serif" role="img" aria-label="agent scan flow">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker></defs>
+<rect width="1200" height="430" rx="18" fill="#f8fafc"/>
+<text x="30" y="36" font-size="14" font-weight="700" fill="#475569">⟳ scan_period_ms ごと（既定 1 秒）</text>
+<rect x="30" y="60" width="230" height="70" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="145.0" y="91.0" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">トピック一覧を取得</text>
+<text x="145.0" y="111.0" text-anchor="middle" font-size="12" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">get_topic_names_and_types()</text>
+<line x1="262" y1="95.0" x2="296" y2="95.0" stroke="#334155" stroke-width="2.5" marker-end="url(#ah)"/>
+<rect x="300" y="60" width="270" height="70" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="435.0" y="91.0" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">フィルタ</text>
+<text x="435.0" y="111.0" text-anchor="middle" font-size="12" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">allowlist / denylist / hidden / internal</text>
+<line x1="572" y1="95.0" x2="606" y2="95.0" stroke="#334155" stroke-width="2.5" marker-end="url(#ah)"/>
+<rect x="610" y="60" width="230" height="70" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="725.0" y="91.0" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">endpoint 情報を取得</text>
+<text x="725.0" y="111.0" text-anchor="middle" font-size="12" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">publisher / subscriber ごと</text>
+<line x1="842" y1="95.0" x2="886" y2="95.0" stroke="#334155" stroke-width="2.5" marker-end="url(#ah)"/>
+<path d="M1010,40.0 L1130.0,95.0 L1010,150.0 L890.0,95.0 z" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+<text x="1010" y="93.0" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">監視ツール自身？</text>
+<text x="1010" y="111.0" text-anchor="middle" font-size="11.5" fill="#475569">agent / web server</text>
+<line x1="1010" y1="150.0" x2="1010" y2="218" stroke="#334155" stroke-width="2.5" marker-end="url(#ah)"/>
+<text x="1020" y="196" font-size="13" font-weight="700" fill="#334155">はい</text>
+<rect x="880" y="220" width="260" height="56" rx="12" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+<text x="1010.0" y="253.0" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">件数とグラフから除外</text>
+<path d="M1130,95.0 H1165 V345 H1136" fill="none" stroke="#334155" stroke-width="2.5" marker-end="url(#ah)"/>
+<text x="1137" y="87.0" font-size="13" font-weight="700" fill="#334155">いいえ</text>
+<path d="M1010,290.0 L1130.0,345 L1010,400.0 L890.0,345 z" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+<text x="1010" y="343" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">自 PC の endpoint？</text>
+<text x="1010" y="361" text-anchor="middle" font-size="11.5" fill="#475569">判定順は 3.1 を参照</text>
+<line x1="888" y1="345" x2="846" y2="345" stroke="#334155" stroke-width="2.5" marker-end="url(#ah)"/>
+<rect x="610" y="310" width="230" height="70" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="725.0" y="341.0" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">トピックを分類</text>
+<text x="725.0" y="361.0" text-anchor="middle" font-size="12" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">local / mixed / orphan / remote</text>
+<line x1="608" y1="345" x2="574" y2="345" stroke="#334155" stroke-width="2.5" marker-end="url(#ah)"/>
+<rect x="300" y="310" width="270" height="70" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+<text x="435.0" y="341.0" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">subscribe を作成・削除</text>
+<text x="435.0" y="361.0" text-anchor="middle" font-size="12" fill="#475569">自 PC のトピックだけ購読</text>
+<line x1="298" y1="345" x2="264" y2="345" stroke="#334155" stroke-width="2.5" marker-end="url(#ah)"/>
+<rect x="30" y="310" width="230" height="70" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="145.0" y="341.0" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">キャッシュに保存</text>
+<text x="145.0" y="361.0" text-anchor="middle" font-size="12" fill="#475569" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace">stats / graph JSON の生成に再利用</text>
+<text x="30" y="410" font-size="13" fill="#ea580c" font-weight="700">→ report_period_ms ごとに stats / graph JSON を publish</text>
+</svg>

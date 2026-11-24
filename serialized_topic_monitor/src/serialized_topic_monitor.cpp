@@ -1,7 +1,9 @@
 #include "serialized_topic_monitor/serialized_topic_monitor.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <iomanip>
 #include <limits>
@@ -10,6 +12,7 @@
 #include <sstream>
 
 #include <rclcpp/qos.hpp>
+#include <rmw/rmw.h>
 #include <unistd.h>
 
 namespace serialized_topic_monitor
@@ -209,8 +212,8 @@ void TopicMonitor::callback(std::shared_ptr<rclcpp::SerializedMessage> msg)
 /**
  * @brief Construct monitoring node and initialize timers/publishers.
  */
-TopicHzMonitorWebNode::TopicHzMonitorWebNode()
-: rclcpp::Node("serialized_topic_monitor_node")
+TopicHzMonitorWebNode::TopicHzMonitorWebNode(const rclcpp::NodeOptions & options)
+: rclcpp::Node("serialized_topic_monitor_node", options)
 {
   this->declare_parameter<std::vector<std::string>>("allowlist", std::vector<std::string>{});
   this->declare_parameter<std::vector<std::string>>(
@@ -225,12 +228,26 @@ TopicHzMonitorWebNode::TopicHzMonitorWebNode()
   this->declare_parameter<std::string>("stats_topic", stats_topic_);
   this->declare_parameter<std::string>("graph_topic", graph_topic_);
 
+  // Distributed monitoring parameters.
+  this->declare_parameter<std::string>("host_name", "");
+  this->declare_parameter<std::string>("locality_mode", locality_mode_);
+  this->declare_parameter<std::string>("subscribe_policy", subscribe_policy_);
+  this->declare_parameter<std::vector<std::string>>(
+    "local_node_namespaces", std::vector<std::string>{});
+  this->declare_parameter<std::vector<std::string>>(
+    "local_node_names", std::vector<std::string>{});
+
   load_parameters();
 
+  // Reliable + depth 10 so that a burst of agents publishing at the same time
+  // does not drop payloads on the master side.
+  const auto payload_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
   stats_publisher_ =
-    this->create_publisher<std_msgs::msg::String>(stats_topic_, rclcpp::QoS(1).reliable());
+    this->create_publisher<std_msgs::msg::String>(stats_topic_, payload_qos);
   graph_publisher_ =
-    this->create_publisher<std_msgs::msg::String>(graph_topic_, rclcpp::QoS(1).reliable());
+    this->create_publisher<std_msgs::msg::String>(graph_topic_, payload_qos);
+
+  init_locality();
 
   scan_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(scan_period_ms_),
@@ -260,6 +277,35 @@ void TopicHzMonitorWebNode::load_parameters()
   stats_topic_ = this->get_parameter("stats_topic").as_string();
   graph_topic_ = this->get_parameter("graph_topic").as_string();
 
+  host_name_ = this->get_parameter("host_name").as_string();
+  if (host_name_.empty()) {
+    host_name_ = get_hostname();
+  }
+
+  const auto locality_mode = this->get_parameter("locality_mode").as_string();
+  if (locality_mode == "auto" || locality_mode == "all") {
+    locality_mode_ = locality_mode;
+  } else {
+    RCLCPP_WARN_ONCE(
+      this->get_logger(),
+      "Invalid locality_mode '%s' (expected auto|all); using 'auto'.", locality_mode.c_str());
+    locality_mode_ = "auto";
+  }
+
+  const auto subscribe_policy = this->get_parameter("subscribe_policy").as_string();
+  if (subscribe_policy == "local_only" || subscribe_policy == "any_local") {
+    subscribe_policy_ = subscribe_policy;
+  } else {
+    RCLCPP_WARN_ONCE(
+      this->get_logger(),
+      "Invalid subscribe_policy '%s' (expected local_only|any_local); using 'local_only'.",
+      subscribe_policy.c_str());
+    subscribe_policy_ = "local_only";
+  }
+
+  local_node_namespaces_ = this->get_parameter("local_node_namespaces").as_string_array();
+  local_node_names_ = this->get_parameter("local_node_names").as_string_array();
+
   if (scan_period_ms_ <= 0) {
     scan_period_ms_ = 1000;
   }
@@ -275,19 +321,146 @@ void TopicHzMonitorWebNode::load_parameters()
 }
 
 /**
+ * @brief Determine how this agent decides "same host" and warn when it cannot.
+ *
+ * The self GID comes from our own publisher; with Fast DDS, bytes 2..3 of the
+ * GUID prefix identify the host, so remote endpoints can be compared to it.
+ */
+void TopicHzMonitorWebNode::init_locality()
+{
+  rmw_identifier_ = rmw_get_implementation_identifier();
+  agent_node_fqn_ = this->get_fully_qualified_name();
+  env_localhost_only_ = env_forces_localhost();
+
+  self_gid_ = locality::to_gid_bytes(stats_publisher_->get_gid().data);
+  // The vendor check alone could (rarely) match a random non-Fast-DDS prefix,
+  // so also require a Fast DDS based RMW.
+  gid_locality_available_ =
+    locality::is_fastdds_gid(self_gid_) &&
+    rmw_identifier_.find("fastrtps") != std::string::npos;
+
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Agent host='%s' rmw='%s' locality_mode='%s' subscribe_policy='%s' self_host_tag='%s'%s",
+    host_name_.c_str(),
+    rmw_identifier_.c_str(),
+    locality_mode_.c_str(),
+    subscribe_policy_.c_str(),
+    locality::gid_host_tag(self_gid_).c_str(),
+    env_localhost_only_ ? " (localhost-only discovery: all endpoints are local)" : "");
+
+  if (locality_mode_ == "auto" && !env_localhost_only_ && !gid_locality_available_ &&
+    local_node_namespaces_.empty() && local_node_names_.empty())
+  {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "locality_mode=auto cannot determine the host of endpoints with RMW '%s' "
+      "(automatic detection supports Fast DDS only) and neither local_node_namespaces nor "
+      "local_node_names is set: NO topics will be measured. Set local_node_namespaces / "
+      "local_node_names, or use locality_mode:=all for single-host setups.",
+      rmw_identifier_.c_str());
+  }
+}
+
+/**
+ * @brief Collect nodes that belong to monitor tooling (agents and web servers).
+ *
+ * Any node publishing or subscribing the stats/graph topics is treated as part of
+ * the monitor itself and excluded from counts and the graph.
+ */
+void TopicHzMonitorWebNode::refresh_tool_nodes()
+{
+  tool_node_fqns_.clear();
+  tool_participant_prefixes_.clear();
+  tool_node_fqns_.insert(agent_node_fqn_);
+
+  auto add = [this](const rclcpp::TopicEndpointInfo & info) {
+      if (is_unknown_node_name(info)) {
+        // Node names of remote participants can be unknown (e.g. Humble <-> Jazzy,
+        // whose ros_discovery_info is incompatible). Never register the placeholder
+        // name, or every unknown endpoint would be dropped; remember the DDS
+        // participant (process) instead.
+        const auto prefix =
+          locality::gid_participant_prefix(locality::to_gid_bytes(info.endpoint_gid()));
+        if (!prefix.empty()) {
+          tool_participant_prefixes_.insert(prefix);
+        }
+        return;
+      }
+      tool_node_fqns_.insert(make_node_fqn(info.node_namespace(), info.node_name()));
+    };
+
+  for (const auto & topic : {stats_topic_, graph_topic_}) {
+    for (const auto & info : this->get_publishers_info_by_topic(topic)) {
+      add(info);
+    }
+    for (const auto & info : this->get_subscriptions_info_by_topic(topic)) {
+      add(info);
+    }
+  }
+}
+
+bool TopicHzMonitorWebNode::is_unknown_node_name(const rclcpp::TopicEndpointInfo & info)
+{
+  return info.node_name().empty() || info.node_name() == "_NODE_NAME_UNKNOWN_";
+}
+
+bool TopicHzMonitorWebNode::is_tool_endpoint(const rclcpp::TopicEndpointInfo & info) const
+{
+  if (is_unknown_node_name(info)) {
+    return !tool_participant_prefixes_.empty() &&
+           tool_participant_prefixes_.count(
+      locality::gid_participant_prefix(locality::to_gid_bytes(info.endpoint_gid()))) > 0U;
+  }
+  return tool_node_fqns_.count(make_node_fqn(info.node_namespace(), info.node_name())) > 0U;
+}
+
+/**
+ * @brief Decide whether an endpoint lives on this agent's host.
+ */
+bool TopicHzMonitorWebNode::is_local_endpoint(const rclcpp::TopicEndpointInfo & info) const
+{
+  if (locality_mode_ == "all" || env_localhost_only_) {
+    return true;
+  }
+
+  const std::string ns = info.node_namespace().empty() ? "/" : info.node_namespace();
+  if (locality::matches_any_pattern(local_node_namespaces_, ns)) {
+    return true;
+  }
+  if (locality::matches_any_pattern(local_node_names_, info.node_name()) ||
+    locality::matches_any_pattern(
+      local_node_names_, make_node_fqn(info.node_namespace(), info.node_name())))
+  {
+    return true;
+  }
+
+  if (gid_locality_available_) {
+    return locality::compare_host(self_gid_, locality::to_gid_bytes(info.endpoint_gid())) ==
+           locality::HostRelation::kSameHost;
+  }
+  return false;
+}
+
+/**
  * @brief Refresh monitored topic set from current ROS graph state.
+ *
+ * Every scan classifies each topic by where its publishers live and caches the
+ * endpoint information for the stats/graph builders.
  */
 void TopicHzMonitorWebNode::update_topics()
 {
   load_parameters();
+  refresh_tool_nodes();
 
   for (auto & entry : monitors_) {
     entry.second->set_window_size(window_size_);
   }
 
   const auto topic_map = this->get_topic_names_and_types();
+  const bool subscribe_mixed = subscribe_policy_ == "any_local";
 
-  std::unordered_set<std::string> seen_topics;
+  std::map<std::string, TopicEndpointCache> next_cache;
 
   for (const auto & entry : topic_map) {
     const auto & topic_name = entry.first;
@@ -297,25 +470,83 @@ void TopicHzMonitorWebNode::update_topics()
       continue;
     }
 
-    seen_topics.insert(topic_name);
+    TopicEndpointCache cache;
+    cache.type = topic_types.front();
 
-    if (monitors_.find(topic_name) == monitors_.end()) {
+    for (auto & info : this->get_publishers_info_by_topic(topic_name)) {
+      if (is_tool_endpoint(info)) {
+        continue;
+      }
+      ++cache.publisher_count;
+      if (is_local_endpoint(info)) {
+        ++cache.local_publisher_count;
+        cache.local_publishers.push_back(std::move(info));
+      } else {
+        ++cache.remote_publisher_count;
+      }
+    }
+
+    for (auto & info : this->get_subscriptions_info_by_topic(topic_name)) {
+      if (is_tool_endpoint(info)) {
+        continue;
+      }
+      ++cache.subscriber_count;
+      if (is_local_endpoint(info)) {
+        cache.local_subscribers.push_back(std::move(info));
+      }
+    }
+
+    if (cache.publisher_count > 0U) {
+      if (cache.remote_publisher_count == 0U) {
+        cache.locality = TopicLocality::kLocal;
+        cache.monitored = true;
+      } else if (cache.local_publisher_count > 0U) {
+        cache.locality = TopicLocality::kMixed;
+        cache.monitored = subscribe_mixed;
+      } else {
+        cache.locality = TopicLocality::kRemote;
+      }
+    } else if (!cache.local_subscribers.empty()) {
+      cache.locality = TopicLocality::kOrphan;
+    } else {
+      cache.locality = TopicLocality::kNone;
+    }
+
+    // Keep only topics with an endpoint on this host: every reported topic has one
+    // (local/mixed: a local publisher, orphan: a local subscriber), and remote-only
+    // topics with a local subscriber are still needed for the graph.
+    if (cache.local_publishers.empty() && cache.local_subscribers.empty()) {
+      continue;
+    }
+    next_cache.emplace(topic_name, std::move(cache));
+  }
+
+  // Create subscriptions for measured topics; keep an existing one for orphan topics
+  // (no publisher -> no traffic, and it preserves age/message_count); drop everything else
+  // so that remote payloads stop flowing to this host.
+  for (const auto & entry : next_cache) {
+    const auto & topic_name = entry.first;
+    const auto & cache = entry.second;
+    if (cache.monitored && monitors_.find(topic_name) == monitors_.end()) {
       monitors_.emplace(
         topic_name,
-        std::make_shared<TopicMonitor>(this, topic_name, topic_types.front(), window_size_));
+        std::make_shared<TopicMonitor>(this, topic_name, cache.type, window_size_));
     }
   }
 
-  std::vector<std::string> to_remove;
-  for (const auto & entry : monitors_) {
-    if (seen_topics.find(entry.first) == seen_topics.end()) {
-      to_remove.push_back(entry.first);
+  for (auto it = monitors_.begin(); it != monitors_.end(); ) {
+    const auto cache_it = next_cache.find(it->first);
+    const bool keep =
+      cache_it != next_cache.end() &&
+      (cache_it->second.monitored || cache_it->second.locality == TopicLocality::kOrphan);
+    if (keep) {
+      ++it;
+    } else {
+      it = monitors_.erase(it);
     }
   }
 
-  for (const auto & topic_name : to_remove) {
-    monitors_.erase(topic_name);
-  }
+  topic_cache_ = std::move(next_cache);
 }
 
 void TopicHzMonitorWebNode::publish_payloads()
@@ -353,14 +584,6 @@ bool TopicHzMonitorWebNode::should_monitor_topic(const std::string & topic_name)
     return false;
   }
   return true;
-}
-
-bool TopicHzMonitorWebNode::should_include_graph_node(
-  const std::string & node_namespace,
-  const std::string & node_name) const
-{
-  (void)node_namespace;
-  return node_name != "serialized_topic_monitor_node";
 }
 
 /**
@@ -455,6 +678,16 @@ std::string TopicHzMonitorWebNode::make_namespace_cluster_id(
 {
   const std::string ns = node_namespace.empty() ? "/" : node_namespace;
   return "ns://" + host + "::" + ns;
+}
+
+/**
+ * @brief Build a graph node id for a ROS node that is unique across hosts.
+ */
+std::string TopicHzMonitorWebNode::make_graph_node_id(
+  const std::string & host,
+  const std::string & node_fqn)
+{
+  return "node://" + host + "::" + node_fqn;
 }
 
 /**
@@ -568,46 +801,115 @@ std::string TopicHzMonitorWebNode::json_escape(const std::string & value)
 }
 
 /**
+ * @brief Convert topic locality into the string used in stats JSON.
+ */
+std::string TopicHzMonitorWebNode::locality_to_string(TopicLocality locality)
+{
+  switch (locality) {
+    case TopicLocality::kLocal: return "local";
+    case TopicLocality::kMixed: return "mixed";
+    case TopicLocality::kOrphan: return "orphan";
+    case TopicLocality::kRemote: return "remote";
+    case TopicLocality::kNone: break;
+  }
+  return "none";
+}
+
+/**
+ * @brief Return true when ROS discovery is restricted to this host by environment.
+ *
+ * In that case every visible endpoint is necessarily on this host.
+ */
+bool TopicHzMonitorWebNode::env_forces_localhost()
+{
+  const char * range = std::getenv("ROS_AUTOMATIC_DISCOVERY_RANGE");
+  if (range != nullptr) {
+    std::string value(range);
+    std::transform(
+      value.begin(), value.end(), value.begin(),
+      [](unsigned char c) {return static_cast<char>(std::toupper(c));});
+    if (value == "LOCALHOST") {
+      return true;
+    }
+  }
+  const char * localhost_only = std::getenv("ROS_LOCALHOST_ONLY");
+  return localhost_only != nullptr && std::string(localhost_only) == "1";
+}
+
+/**
+ * @brief Build one topic's stats, using the live monitor when one exists.
+ */
+TopicStats TopicHzMonitorWebNode::make_topic_stats(
+  const std::string & topic_name,
+  const TopicEndpointCache & cache,
+  const rclcpp::Time & now) const
+{
+  const auto monitor_it = monitors_.find(topic_name);
+  if (monitor_it != monitors_.end()) {
+    return monitor_it->second->snapshot(
+      now, stale_timeout_sec_, cache.publisher_count, cache.subscriber_count);
+  }
+
+  TopicStats stats;
+  stats.name = topic_name;
+  stats.type = cache.type;
+  stats.publisher_count = cache.publisher_count;
+  stats.subscriber_count = cache.subscriber_count;
+  stats.alive = cache.publisher_count > 0U;
+  stats.stale = true;
+  return stats;
+}
+
+/**
  * @brief Build stats payload consumed by table/chart views.
  */
 std::string TopicHzMonitorWebNode::build_stats_json() const
 {
   const auto now = this->now();
 
-  std::vector<TopicStats> stats;
-  stats.reserve(monitors_.size());
+  struct Row
+  {
+    TopicStats stats;
+    const TopicEndpointCache * cache;
+  };
+  std::vector<Row> rows;
+  rows.reserve(topic_cache_.size());
 
-  for (const auto & entry : monitors_) {
-    const auto & topic_name = entry.first;
-    const auto & monitor = entry.second;
-    const std::size_t publisher_count =
-      static_cast<std::size_t>(this->count_publishers(topic_name));
-    const std::size_t subscriber_count =
-      static_cast<std::size_t>(this->count_subscribers(topic_name));
-    stats.push_back(
-      monitor->snapshot(now, stale_timeout_sec_, publisher_count, subscriber_count));
+  // topic_cache_ is a std::map, so rows are already sorted by topic name.
+  for (const auto & entry : topic_cache_) {
+    if (!entry.second.reported()) {
+      continue;
+    }
+    rows.push_back(Row{make_topic_stats(entry.first, entry.second, now), &entry.second});
   }
 
-  std::sort(
-    stats.begin(),
-    stats.end(),
-    [](const TopicStats & a, const TopicStats & b) {
-      return a.name < b.name;
-    });
+  const std::string host = json_escape(host_name_);
 
   std::ostringstream oss;
   oss << "{";
+  oss << "\"schema_version\":2,";
+  oss << "\"host\":\"" << host << "\",";
+  oss << "\"agent_node\":\"" << json_escape(agent_node_fqn_) << "\",";
+  oss << "\"rmw\":\"" << json_escape(rmw_identifier_) << "\",";
+  oss << "\"locality_mode\":\"" << json_escape(locality_mode_) << "\",";
+  oss << "\"subscribe_policy\":\"" << json_escape(subscribe_policy_) << "\",";
   oss << "\"generated_at_sec\":" << std::fixed << std::setprecision(3) << now.seconds() << ",";
-  oss << "\"topic_count\":" << stats.size() << ",";
+  oss << "\"topic_count\":" << rows.size() << ",";
   oss << "\"topics\":[";
-  for (std::size_t i = 0U; i < stats.size(); ++i) {
-    const auto & s = stats[i];
+  for (std::size_t i = 0U; i < rows.size(); ++i) {
+    const auto & s = rows[i].stats;
+    const auto & c = *rows[i].cache;
     if (i > 0U) {
       oss << ",";
     }
     oss << "{"
         << "\"name\":\"" << json_escape(s.name) << "\","
         << "\"type\":\"" << json_escape(s.type) << "\","
+        << "\"host\":\"" << host << "\","
+        << "\"monitored\":" << (c.monitored ? "true" : "false") << ","
+        << "\"locality\":\"" << locality_to_string(c.locality) << "\","
+        << "\"local_publisher_count\":" << c.local_publisher_count << ","
+        << "\"remote_publisher_count\":" << c.remote_publisher_count << ","
         << "\"publisher_count\":" << s.publisher_count << ","
         << "\"subscriber_count\":" << s.subscriber_count << ","
         << "\"alive\":" << (s.alive ? "true" : "false") << ","
@@ -631,30 +933,18 @@ std::string TopicHzMonitorWebNode::build_stats_json() const
 
 /**
  * @brief Build graph nodes/edges and attach per-link QoS metadata.
+ *
+ * Only endpoints on this host are emitted. Topic node ids are the topic names,
+ * which are identical on every host, so the master can union per-host graphs.
  */
 GraphData TopicHzMonitorWebNode::build_graph_data() const
 {
   const auto now = this->now();
-  const std::string local_host = get_hostname();
-
-  const auto topic_map = this->get_topic_names_and_types();
+  const std::string & local_host = host_name_;
 
   GraphData graph;
   std::set<std::string> added_node_ids;
   std::set<std::string> added_edge_ids;
-  std::map<std::string, TopicStats> topic_stats_map;
-
-  for (const auto & entry : monitors_) {
-    const auto & topic_name = entry.first;
-    const auto & monitor = entry.second;
-    const std::size_t publisher_count =
-      static_cast<std::size_t>(this->count_publishers(topic_name));
-    const std::size_t subscriber_count =
-      static_cast<std::size_t>(this->count_subscribers(topic_name));
-    topic_stats_map.emplace(
-      topic_name,
-      monitor->snapshot(now, stale_timeout_sec_, publisher_count, subscriber_count));
-  }
 
   auto add_host_cluster = [&](const std::string & host) {
     const std::string host_id = "host://" + host;
@@ -663,7 +953,7 @@ GraphData TopicHzMonitorWebNode::build_graph_data() const
         host_id,
         host,
         "host",
-        "neutral",
+        "ok",
         host,
         "",
         ""
@@ -691,23 +981,60 @@ GraphData TopicHzMonitorWebNode::build_graph_data() const
     return ns_id;
   };
 
-  for (const auto & entry : topic_map) {
-    const auto & topic_name = entry.first;
-    const auto & topic_types = entry.second;
+  auto add_ros_node = [&](const rclcpp::TopicEndpointInfo & info) {
+    const std::string node_fqn = make_node_fqn(info.node_namespace(), info.node_name());
+    const std::string node_id = make_graph_node_id(local_host, node_fqn);
+    const std::string ns_id = add_namespace_cluster(local_host, info.node_namespace());
+    if (added_node_ids.insert(node_id).second) {
+      graph.nodes.push_back(GraphNode{
+        node_id,
+        node_fqn,
+        "node",
+        "neutral",
+        local_host,
+        info.node_namespace(),
+        ns_id
+      });
+    }
+    return node_id;
+  };
 
-    if (!should_monitor_topic(topic_name) || topic_types.empty()) {
+  auto make_edge = [](
+    const std::string & id, const std::string & source, const std::string & target,
+    const rclcpp::QoS & qos) {
+      return GraphEdge{
+        id,
+        source,
+        target,
+        reliability_to_string(static_cast<int>(qos.reliability())),
+        reliability_to_string(static_cast<int>(qos.reliability())),
+        durability_to_string(static_cast<int>(qos.durability())),
+        history_to_string(static_cast<int>(qos.history())),
+        static_cast<std::size_t>(qos.depth()),
+        liveliness_to_string(static_cast<int>(qos.liveliness())),
+        duration_to_seconds(qos.deadline()),
+        duration_to_seconds(qos.lifespan()),
+        duration_to_seconds(qos.liveliness_lease_duration()),
+        qos.avoid_ros_namespace_conventions()
+      };
+    };
+
+  // Always emit the host so that a host without any endpoint is still visible.
+  add_host_cluster(local_host);
+
+  for (const auto & entry : topic_cache_) {
+    const auto & topic_name = entry.first;
+    const auto & cache = entry.second;
+
+    if (cache.local_publishers.empty() && cache.local_subscribers.empty()) {
       continue;
     }
 
-    TopicStats topic_stats;
-    const auto stats_it = topic_stats_map.find(topic_name);
-    if (stats_it != topic_stats_map.end()) {
-      topic_stats = stats_it->second;
-    } else {
-      topic_stats.name = topic_name;
-      topic_stats.type = topic_types.front();
-      topic_stats.alive = this->count_publishers(topic_name) > 0;
-      topic_stats.stale = true;
+    std::string status = "neutral";
+    if (cache.monitored) {
+      status = topic_status_to_string(make_topic_stats(topic_name, cache, now));
+    } else if (cache.locality == TopicLocality::kOrphan) {
+      status = "down";
     }
 
     if (added_node_ids.insert(topic_name).second) {
@@ -715,98 +1042,26 @@ GraphData TopicHzMonitorWebNode::build_graph_data() const
         topic_name,
         topic_name,
         "topic",
-        topic_status_to_string(topic_stats),
+        status,
         "",
         "",
         ""
       });
     }
 
-    const auto publishers = this->get_publishers_info_by_topic(topic_name);
-    for (const auto & pub : publishers) {
-      if (!should_include_graph_node(pub.node_namespace(), pub.node_name())) {
-        continue;
-      }
-
-      const std::string node_fqn =
-        make_node_fqn(pub.node_namespace(), pub.node_name());
-      const std::string ns_id =
-        add_namespace_cluster(local_host, pub.node_namespace());
-
-      if (added_node_ids.insert(node_fqn).second) {
-        graph.nodes.push_back(GraphNode{
-          node_fqn,
-          node_fqn,
-          "node",
-          "neutral",
-          local_host,
-          pub.node_namespace(),
-          ns_id
-        });
-      }
-
-      const std::string edge_id = node_fqn + "->" + topic_name + "#pub";
+    for (const auto & pub : cache.local_publishers) {
+      const std::string node_id = add_ros_node(pub);
+      const std::string edge_id = node_id + "->" + topic_name + "#pub";
       if (added_edge_ids.insert(edge_id).second) {
-        const auto & qos = pub.qos_profile();
-        graph.edges.push_back(GraphEdge{
-          edge_id,
-          node_fqn,
-          topic_name,
-          reliability_to_string(static_cast<int>(qos.reliability())),
-          reliability_to_string(static_cast<int>(qos.reliability())),
-          durability_to_string(static_cast<int>(qos.durability())),
-          history_to_string(static_cast<int>(qos.history())),
-          static_cast<std::size_t>(qos.depth()),
-          liveliness_to_string(static_cast<int>(qos.liveliness())),
-          duration_to_seconds(qos.deadline()),
-          duration_to_seconds(qos.lifespan()),
-          duration_to_seconds(qos.liveliness_lease_duration()),
-          qos.avoid_ros_namespace_conventions()
-        });
+        graph.edges.push_back(make_edge(edge_id, node_id, topic_name, pub.qos_profile()));
       }
     }
 
-    const auto subscriptions = this->get_subscriptions_info_by_topic(topic_name);
-    for (const auto & sub : subscriptions) {
-      if (!should_include_graph_node(sub.node_namespace(), sub.node_name())) {
-        continue;
-      }
-
-      const std::string node_fqn =
-        make_node_fqn(sub.node_namespace(), sub.node_name());
-      const std::string ns_id =
-        add_namespace_cluster(local_host, sub.node_namespace());
-
-      if (added_node_ids.insert(node_fqn).second) {
-        graph.nodes.push_back(GraphNode{
-          node_fqn,
-          node_fqn,
-          "node",
-          "neutral",
-          local_host,
-          sub.node_namespace(),
-          ns_id
-        });
-      }
-
-      const std::string edge_id = topic_name + "->" + node_fqn + "#sub";
+    for (const auto & sub : cache.local_subscribers) {
+      const std::string node_id = add_ros_node(sub);
+      const std::string edge_id = topic_name + "->" + node_id + "#sub";
       if (added_edge_ids.insert(edge_id).second) {
-        const auto & qos = sub.qos_profile();
-        graph.edges.push_back(GraphEdge{
-          edge_id,
-          topic_name,
-          node_fqn,
-          reliability_to_string(static_cast<int>(qos.reliability())),
-          reliability_to_string(static_cast<int>(qos.reliability())),
-          durability_to_string(static_cast<int>(qos.durability())),
-          history_to_string(static_cast<int>(qos.history())),
-          static_cast<std::size_t>(qos.depth()),
-          liveliness_to_string(static_cast<int>(qos.liveliness())),
-          duration_to_seconds(qos.deadline()),
-          duration_to_seconds(qos.lifespan()),
-          duration_to_seconds(qos.liveliness_lease_duration()),
-          qos.avoid_ros_namespace_conventions()
-        });
+        graph.edges.push_back(make_edge(edge_id, topic_name, node_id, sub.qos_profile()));
       }
     }
   }
@@ -840,6 +1095,8 @@ std::string TopicHzMonitorWebNode::build_graph_json() const
 
   std::ostringstream oss;
   oss << "{";
+  oss << "\"schema_version\":2,";
+  oss << "\"host\":\"" << json_escape(host_name_) << "\",";
   oss << "\"node_count\":" << graph.nodes.size() << ",";
   oss << "\"edge_count\":" << graph.edges.size() << ",";
   oss << "\"nodes\":[";

@@ -1,0 +1,59 @@
+# Multi-host test: three "PCs" on an isolated bridge network.
+#   master (Jazzy): web server + agent, publishes /a_chatter, subscribes /b_chatter
+#   host_b (Jazzy): agent, publishes /big (200 KiB x 10 Hz) and /b_chatter
+#   host_c (Humble): agent, publishes /c_chatter, subscribes /a_chatter
+# Run: test/multihost/run_test.sh
+name: comm_monitor_multihost
+
+x-common: &common
+  init: true
+  networks: [ros_net]
+  environment: &env
+    ROS_DOMAIN_ID: "77"
+    RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+    LOCALITY_MODE: auto
+
+services:
+  master:
+    <<: *common
+    build:
+      context: ../..
+      dockerfile: test/multihost/Dockerfile
+      args: { BASE_IMAGE: "ros:jazzy-ros-base-noble" }
+    image: comm_monitor_multihost:jazzy
+    hostname: host-a
+    ports:
+      # Web UI for manual inspection / screenshots (localhost only).
+      - "127.0.0.1:${MASTER_HTTP_PORT:-18090}:8080"
+    environment:
+      <<: *env
+      ROLE: master
+      MACHINE_ID: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1
+      LOCALITY_MODE: ${MASTER_LOCALITY_MODE:-auto}
+
+  host_b:
+    <<: *common
+    image: comm_monitor_multihost:jazzy
+    depends_on: [master]
+    hostname: host-b
+    environment:
+      <<: *env
+      ROLE: host_b
+      MACHINE_ID: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2
+
+  host_c:
+    <<: *common
+    build:
+      context: ../..
+      dockerfile: test/multihost/Dockerfile
+      args: { BASE_IMAGE: "ros:humble-ros-base-jammy" }
+    image: comm_monitor_multihost:humble
+    hostname: host-c
+    environment:
+      <<: *env
+      ROLE: host_c
+      MACHINE_ID: ccccccccccccccccccccccccccccccc3
+
+networks:
+  ros_net:
+    driver: bridge
