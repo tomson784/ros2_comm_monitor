@@ -21,6 +21,10 @@
         <span class="mini-value" id="generatedAt">-</span>
       </div>
       <div class="mini-stat">
+        <span class="mini-label">Hosts (online / total)</span>
+        <span class="mini-value" id="hostCount">0 / 0</span>
+      </div>
+      <div class="mini-stat">
         <span class="mini-label">Topics</span>
         <span class="mini-value" id="topicCount">0</span>
       </div>
@@ -36,17 +40,22 @@
   </header>
 
   <main class="page">
+    <section id="hostBar" class="host-bar" aria-label="Hosts">
+      <span class="host-bar-empty">No agent has reported yet.</span>
+    </section>
+
     <section class="card controls">
       <div class="control-grid">
         <label>
           <span>Filter</span>
-          <input id="filterInput" type="text" placeholder="topic name / type" />
+          <input id="filterInput" type="text" placeholder="topic name / type / host" />
         </label>
 
         <label>
           <span>Sort</span>
           <select id="sortKey">
             <option value="name">Name</option>
+            <option value="host">Host</option>
             <option value="hz">Hz</option>
             <option value="bandwidth_mib_per_sec">Bandwidth</option>
             <option value="latest_message_size_mib">Message Size</option>
@@ -78,7 +87,7 @@
           <span>Unhealthy Only</span>
           <div class="checkbox-row">
             <input id="unhealthyOnly" type="checkbox" />
-            <span>Show only stale/down topics</span>
+            <span>Show only stale/down/offline topics</span>
           </div>
         </label>
       </div>
@@ -112,6 +121,7 @@
             <thead>
               <tr>
                 <th>Status</th>
+                <th>Host</th>
                 <th>Topic</th>
                 <th>Type</th>
                 <th>Hz</th>
@@ -124,7 +134,7 @@
               </tr>
             </thead>
             <tbody id="topicsBody">
-              <tr><td colspan="10" class="empty-cell">Loading...</td></tr>
+              <tr><td colspan="11" class="empty-cell">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -156,6 +166,7 @@
             <span><i class="dot ok"></i> OK</span>
             <span><i class="dot warn"></i> STALE</span>
             <span><i class="dot bad"></i> DOWN</span>
+            <span><i class="dot neutral"></i> NOT MEASURED</span>
           </div>
           <div class="graph-actions">
             <button id="graphZoomOutBtn" class="graph-refresh-btn" type="button" aria-label="Zoom out">-</button>

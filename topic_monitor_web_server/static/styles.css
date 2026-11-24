@@ -32,7 +32,7 @@ body{
 .subtitle{margin:6px 0 0;color:var(--muted);}
 .top-stats{
   display:grid;
-  grid-template-columns:repeat(2,minmax(140px,1fr));
+  grid-template-columns:repeat(3,minmax(140px,1fr));
   gap:12px;
 }
 .mini-stat{
@@ -113,6 +113,22 @@ tbody tr:hover{background:rgba(30,41,59,.45);}
 .badge-ok{background:rgba(34,197,94,.16);color:#86efac;}
 .badge-warn{background:rgba(245,158,11,.16);color:#fcd34d;}
 .badge-bad{background:rgba(239,68,68,.16);color:#fca5a5;}
+.badge-neutral{background:rgba(148,163,184,.16);color:#cbd5e1;}
+.badge-offline{background:rgba(100,116,139,.22);color:#94a3b8;border:1px dashed #64748b;}
+tr.row-offline td{opacity:.6;}
+
+.host-bar{
+  display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;
+}
+.host-bar-empty{color:var(--muted);font-size:13px;}
+.host-chip{
+  display:flex;align-items:center;gap:10px;
+  background:rgba(17,24,39,.92);border:1px solid var(--border);border-radius:14px;
+  padding:8px 12px;font-size:13px;
+}
+.host-chip.offline{border-style:dashed;opacity:.75;}
+.host-chip-name{font-weight:700;}
+.host-chip-meta{color:var(--muted);}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
 
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
@@ -148,6 +164,8 @@ tbody tr:hover{background:rgba(30,41,59,.45);}
 .dot.ok{background:var(--ok)}
 .dot.warn{background:var(--warn)}
 .dot.bad{background:var(--bad)}
+.dot.neutral{background:#94a3b8}
+.dot.offline{background:#64748b}
 .graph-note{color:var(--muted);font-size:13px;}
 #graphCounts{color:var(--muted);font-size:13px;}
 .graph-main{
@@ -325,3 +343,4 @@ tbody tr:hover{background:rgba(30,41,59,.45);}
   .chart-card{height:360px;min-height:360px;}
   .chart-card canvas{max-height:280px;}
 }
+.graph-group-box.graph-host-offline{stroke:#ef4444;stroke-dasharray:8 6;}

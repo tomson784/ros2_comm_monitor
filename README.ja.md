@@ -218,6 +218,108 @@ HTTP エンドポイント:
 - `/` または `/index.html`: ブラウザ UI
 - `/api/stats`: 最新の stats JSON
 - `/api/graph`: 最新の graph JSON
+- `/api/hosts`: ホストごとの状態（[分散監視](#分散監視) を参照）
+
+## 分散監視
+
+ROS ノードが複数の PC に分散している場合は、各 PC で **agent** を 1 つずつ、マスター PC で **master** を起動します。
+
+### 仕組み
+
+```text
+ PC A (master)                         PC B                        PC C
+ ┌───────────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐
+ │ agent A ─ A で publish    │   │ agent B ─ B で       │   │ agent C ─ C で       │
+ │           されたトピック  │   │   publish された     │   │   publish された     │
+ │ web server ◀── stats/graph JSON ─┤ トピックを計測   │   │ トピックを計測       │
+ │   (全ホストを集約)        │◀──────────────────────────────── stats/graph JSON    │
+ └───────────────────────────┘   └──────────────────────┘   └──────────────────────┘
+```
+
+- トピックのデータ本体は **publish している PC の中だけ** で計測します。publisher が他 PC にある
+  トピックを agent は subscribe しないため、監視のためにデータ本体が PC 間を流れることはありません。
+- 各 agent は小さな stats/graph JSON（`/topic_monitor/stats_json`, `/topic_monitor/graph_json`）だけを送ります。
+- マスターの web server が全ホストの JSON を集約して UI に表示します。
+
+agent は scan のたびに、publisher の所在でトピックを分類します。
+
+| `locality` | publisher | 報告 | subscribe（計測） |
+|---|---|---|---|
+| `local` | すべて自 PC | する | する |
+| `mixed` | 自 PC と他 PC の両方 | する | `subscribe_policy:=any_local` のときだけ |
+| `orphan` | なし（自 PC に subscriber あり） | DOWN として報告 | しない |
+| （報告しない） | 他 PC のみ | しない（その PC の agent が報告） | しない |
+
+「自 PC かどうか」はエンドポイントの GID で判定します。Fast DDS の GUID は先頭 2 バイトがベンダー ID
+（`0x01 0x0F`）、2〜3 バイト目がホスト ID なので、agent 自身の publisher の GID と比較します。
+stats/graph トピックを publish / subscribe しているノード（agent や web server）は監視ツール自身とみなし、
+件数とグラフから除外します。
+
+### 起動方法
+
+マスター以外の各 PC:
+
+```bash
+ros2 launch ros2_comm_monitor agent.launch.py
+```
+
+マスター PC（web server と、`with_agent:=true`（既定）ならマスター自身の agent も起動）:
+
+```bash
+ros2 launch ros2_comm_monitor master.launch.py
+```
+
+agent のノード名は `comm_monitor_agent_<hostname>`（英数字以外は `_` に変換）です。
+`bringup.launch.py` は 1 台用（agent と web server を同じ PC で起動）として残しています。
+全 PC で `ROS_DOMAIN_ID` を揃え、互いにノード探索できる状態にしてください。
+
+### agent のパラメータ
+
+- `host_name`（`string`、既定: `gethostname()`）: UI に表示するホスト名。
+- `locality_mode`（`auto | all`、既定: `auto`）
+  - `auto`: 自 PC で publish されたトピックだけを計測。
+  - `all`: 全エンドポイントを自 PC 扱い（従来の動作。他 PC のデータ本体もネットワーク越しに受信します）。
+- `subscribe_policy`（`local_only | any_local`、既定: `local_only`）
+  - `local_only`: `mixed` トピックは報告するが計測しない。
+  - `any_local`: `mixed` トピックも計測する（他 PC のデータ本体も受信します）。
+- `local_node_namespaces`（`string[]`）/ `local_node_names`（`string[]`）
+  - 自 PC 扱いにする名前空間 / ノード名（名前または FQN）。末尾が `*` なら前方一致。
+  - GID からホストを判定できない Fast DDS 以外の RMW 向けです。
+- 環境変数 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` または `ROS_LOCALHOST_ONLY=1` のときは、全エンドポイントを自 PC 扱いにします。
+- `locality_mode:=auto` で RMW が Fast DDS ではなく、`local_node_*` の設定もない場合は、起動時に WARN を出し、何も計測しません。
+
+例（Cyclone DDS で、ロボットのノードが全て `/robot1` 配下にある場合）:
+
+```bash
+ros2 launch ros2_comm_monitor agent.launch.py local_node_namespaces:="['/robot1*']"
+```
+
+### master のパラメータ
+
+- `agent_timeout_sec`（`double`、既定: `5.0`）: この時間 JSON が来ない PC を offline にする。
+- `forget_after_sec`（`double`、既定: `300.0`）: この時間 JSON が来ない PC を一覧から削除する。
+- web server は reliable・depth 50 で購読し、複数 PC の JSON が上書きし合わないようにしています。
+  agent 側は reliable・depth 10 で publish します。
+
+### JSON の変更点（schema_version 2）
+
+- stats（全体）: `schema_version`, `host`, `agent_node`, `rmw`, `locality_mode`, `subscribe_policy`
+- stats（トピックごと）: `host`, `monitored`, `locality`, `local_publisher_count`, `remote_publisher_count`
+- graph: 自 PC のノードとエッジだけを出力。トピックのノード ID はトピック名（全 PC 共通）、
+  ROS ノードの ID は `node://<host>::<fqn>`。自 PC で計測していないトピックの status は `neutral`。
+- `host` のない旧形式の JSON は、ホスト `local` として扱います。
+
+### 集約 API（master）
+
+- `/api/stats`: (host, topic) ごとに 1 行。offline の PC の行は `stale=true`, `host_online=false`。
+  `hosts`, `host_count`, `online_host_count` も含みます。
+- `/api/graph`: 全ホストのノードとエッジの和集合。複数ホストが報告するトピックは良いほうの status
+  （`ok > stale > down > neutral`）を採用。host ノードは online なら `ok`、offline なら `down`。
+- `/api/hosts`: ホストごとの `online`, `last_seen_age_sec`, `agent_node`, `rmw`, `locality_mode`,
+  `subscribe_policy`, `topic_count`, `monitored_topic_count`。
+
+UI には、ホスト一覧バー（online/offline、計測中のトピック数、最終受信からの秒数）、Host 列、
+`NOT MEASURED` / `HOST OFFLINE` バッジが表示されます。PC が 2 台以上のときは、グラフの系列名が `topic @host` になります。
 
 ## テスト
 
@@ -236,6 +338,8 @@ colcon test-result --verbose
 
 ## 制約
 
-- graph の host 分類は現在ローカルホスト名ベースです。
+- 自動判定（`locality_mode:=auto`）は Fast DDS のみ対応です。GUID 中の 16 bit のホスト ID を使うため、まれに別 PC 間で衝突することがあります。その場合は `local_node_*` の明示設定か `locality_mode:=all` を使ってください。
+- `mixed` トピック（publisher が複数 PC にある）は、既定の `subscribe_policy:=local_only` では計測しません（NOT MEASURED として報告）。
+- ホストを判定できないエンドポイント（agent と異なる RMW のノードなど）は、`local_node_namespaces` / `local_node_names` に一致しない限り自 PC 扱いになりません。
 - QoS は graph API から得られる情報に依存し、複雑なネットワークでは見え方に差が出る場合があります。
 - 本パッケージは通信状態監視が目的で、メッセージ内容の意味的妥当性検証は行いません。

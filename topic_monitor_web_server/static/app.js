@@ -1,8 +1,9 @@
 // Global mutable state used by polling, graph interaction and panel rendering.
 const state = {
-  stats: { topics: [], topic_count: 0, generated_at_sec: null },
+  stats: { topics: [], topic_count: 0, generated_at_sec: null, hosts: [] },
   graph: { nodes: [], edges: [], node_count: 0, edge_count: 0 },
   topicRuntimeByName: new Map(),
+  topicRowsByName: new Map(),
   refreshMs: 1000,
   timerId: null,
   lastGraphSignature: "",
@@ -34,6 +35,8 @@ const graphZoomResetBtn = document.getElementById("graphZoomResetBtn");
 const graphCanvas = document.getElementById("graphCanvas");
 const graphHoverInfo = document.getElementById("graphHoverInfo");
 const graphDetailBody = document.getElementById("graphDetailBody");
+const hostBar = document.getElementById("hostBar");
+const hostCount = document.getElementById("hostCount");
 
 // Defensive numeric conversion used for all API payload fields.
 function safeNum(v, fallback = 0) {
@@ -48,16 +51,42 @@ function formatAge(v) {
   return v === null || v === undefined ? "inf" : safeNum(v).toFixed(3);
 }
 
+// Row status for one (host, topic) stats row.
+// offline: the reporting agent stopped sending, values are frozen.
+// unmeasured: the topic is reported but this host does not subscribe to it
+//             (e.g. publishers on several hosts with subscribe_policy=local_only).
+function rowStatus(topic) {
+  if (!topic) return "neutral";
+  if (topic.host_online === false) return "offline";
+  if (!topic.alive) return "down";
+  if (topic.monitored === false) return "unmeasured";
+  if (topic.stale) return "stale";
+  return "ok";
+}
+
+function isUnhealthy(topic) {
+  const status = rowStatus(topic);
+  return status === "down" || status === "stale" || status === "offline";
+}
+
 function statusBadge(topic) {
-  if (!topic.alive) return '<span class="badge badge-bad">DOWN</span>';
-  if (topic.stale) return '<span class="badge badge-warn">STALE</span>';
+  const status = rowStatus(topic);
+  if (status === "offline") return '<span class="badge badge-offline">HOST OFFLINE</span>';
+  if (status === "down") return '<span class="badge badge-bad">DOWN</span>';
+  if (status === "unmeasured") return '<span class="badge badge-neutral">NOT MEASURED</span>';
+  if (status === "stale") return '<span class="badge badge-warn">STALE</span>';
   return '<span class="badge badge-ok">OK</span>';
 }
 
 function graphTopicStatusColor(status) {
   if (status === "down") return "#ef4444";
   if (status === "stale") return "#f59e0b";
-  return "#22c55e";
+  if (status === "ok") return "#22c55e";
+  return "#94a3b8";
+}
+
+function isMultiHost() {
+  return (state.stats.hosts || []).length >= 2;
 }
 
 function escapeHtml(value) {
@@ -69,23 +98,54 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+// Graph status of a stats row: ok | stale | down | neutral.
 function topicStatusFromTopic(topic) {
   if (!topic || topic.alive === undefined) return "neutral";
-  if (!topic.alive) return "down";
-  if (topic.stale) return "stale";
-  return "ok";
+  const status = rowStatus(topic);
+  if (status === "offline") return topic.alive ? "stale" : "down";
+  if (status === "unmeasured") return "neutral";
+  return status;
 }
+
+const GRAPH_STATUS_RANK = { ok: 3, stale: 2, down: 1, neutral: 0 };
 
 function graphStatusBadge(status) {
   if (status === "down") return '<span class="badge badge-bad">DOWN</span>';
   if (status === "stale") return '<span class="badge badge-warn">STALE</span>';
   if (status === "ok") return '<span class="badge badge-ok">OK</span>';
-  return '<span class="badge badge-warn">N/A</span>';
+  return '<span class="badge badge-neutral">NOT MEASURED</span>';
 }
 
 // Keep topic runtime values in O(1) lookup map for graph hover/details.
+// One topic can be reported by several hosts; the graph shows the best status
+// (ok > stale > down > neutral), matching the server-side graph merge.
 function rebuildTopicRuntimeMap() {
-  state.topicRuntimeByName = new Map((state.stats.topics || []).map((t) => [t.name, t]));
+  const rowsByName = new Map();
+  const bestByName = new Map();
+  (state.stats.topics || []).forEach((t) => {
+    if (!rowsByName.has(t.name)) rowsByName.set(t.name, []);
+    rowsByName.get(t.name).push(t);
+    const current = bestByName.get(t.name);
+    const rank = GRAPH_STATUS_RANK[topicStatusFromTopic(t)] ?? 0;
+    const currentRank = current ? (GRAPH_STATUS_RANK[topicStatusFromTopic(current)] ?? 0) : -1;
+    if (rank > currentRank) bestByName.set(t.name, t);
+  });
+  state.topicRowsByName = rowsByName;
+  state.topicRuntimeByName = bestByName;
+}
+
+function seriesLabel(topic) {
+  return isMultiHost() ? `${topic.name} @${topic.host || "-"}` : String(topic.name);
+}
+
+// Display name for graph node ids (ROS node ids are "node://<host>::<fqn>").
+function graphNodeDisplayName(nodeId) {
+  const node = getGraphNode(nodeId);
+  if (!node) return String(nodeId || "-");
+  if (node.node_type === "node" && isMultiHost() && node.host) {
+    return `${node.label || node.id} @${node.host}`;
+  }
+  return String(node.label || node.id);
 }
 
 function detailRow(label, value, mono = false) {
@@ -314,6 +374,7 @@ function renderSelectedElementDetail() {
       detailRow("Label", d.label || "-", true),
       detailRow("Type", d.node_type || "-"),
       detailRow("Status", d.status || "-"),
+      ...(d.host ? [detailRow("Host", d.host, true)] : []),
       detailRow("Incoming", String(getGraphIncomingEdges(d.id).length)),
       detailRow("Outgoing", String(getGraphOutgoingEdges(d.id).length)),
       detailRow(
@@ -331,6 +392,15 @@ function renderSelectedElementDetail() {
         rows.push(detailRow("Publishers", String(safeNum(topic.publisher_count, 0))));
         rows.push(detailRow("Subscribers", String(safeNum(topic.subscriber_count, 0))));
         rows.push(detailRow("Age", `${formatAge(topic.age_sec)} s`));
+        rows.push(detailRow("Measured On", topic.monitored === false ? "-" : (topic.host || "-"), true));
+      }
+      const reporters = state.topicRowsByName.get(d.id) || [];
+      if (reporters.length > 1 || isMultiHost()) {
+        rows.push(detailRow(
+          "Reported By",
+          reporters.map((r) => `${r.host || "-"} (${rowStatus(r)}, ${r.locality || "-"})`).join(", ") || "-",
+          true
+        ));
       }
     }
 
@@ -347,8 +417,10 @@ function renderSelectedElementDetail() {
 
     const d = edge;
     const pair = findSenderReceiverProfilesFromEdge(edge);
-    const senderPath = pair.senderNodes && pair.senderNodes.length ? pair.senderNodes.join(", ") : "-";
-    const receiverPath = pair.receiverNodes && pair.receiverNodes.length ? pair.receiverNodes.join(", ") : "-";
+    const senderPath = pair.senderNodes && pair.senderNodes.length
+      ? pair.senderNodes.map(graphNodeDisplayName).join(", ") : "-";
+    const receiverPath = pair.receiverNodes && pair.receiverNodes.length
+      ? pair.receiverNodes.map(graphNodeDisplayName).join(", ") : "-";
     const route = `${senderPath} -> ${pair.topic || "-"} -> ${receiverPath}`;
 
     graphDetailBody.innerHTML = `
@@ -465,8 +537,8 @@ function ensureDataset(chart, topicName) {
   return ds;
 }
 
-function pruneDatasets(chart, topicNames) {
-  chart.data.datasets = chart.data.datasets.filter((d) => topicNames.has(d.label));
+function pruneDatasets(chart, seriesLabels) {
+  chart.data.datasets = chart.data.datasets.filter((d) => seriesLabels.has(d.label));
 }
 
 function getFilteredTopics() {
@@ -477,11 +549,12 @@ function getFilteredTopics() {
 
   return [...(state.stats.topics || [])]
     .filter((t) => {
-      if (onlyUnhealthy && t.alive && !t.stale) return false;
+      if (onlyUnhealthy && !isUnhealthy(t)) return false;
       if (!filter) return true;
       return (
         String(t.name || "").toLowerCase().includes(filter) ||
-        String(t.type || "").toLowerCase().includes(filter)
+        String(t.type || "").toLowerCase().includes(filter) ||
+        String(t.host || "").toLowerCase().includes(filter)
       );
     })
     .sort((a, b) => {
@@ -493,15 +566,22 @@ function getFilteredTopics() {
       } else {
         cmp = safeNum(av) - safeNum(bv);
       }
+      if (cmp === 0) {
+        // Stable secondary order so rows of the same topic stay grouped by host.
+        cmp = String(a.name || "").localeCompare(String(b.name || "")) ||
+          String(a.host || "").localeCompare(String(b.host || ""));
+        return cmp;
+      }
       return desc ? -cmp : cmp;
     });
 }
 
 function updateSummary() {
   const topics = state.stats.topics || [];
-  const alive = topics.filter((t) => t.alive).length;
-  const bad = topics.filter((t) => !t.alive || t.stale).length;
+  const alive = topics.filter((t) => t.alive && t.host_online !== false).length;
+  const bad = topics.filter(isUnhealthy).length;
   const bw = topics.reduce((sum, t) => sum + safeNum(t.bandwidth_mib_per_sec), 0);
+  const labelOf = (t) => (isMultiHost() ? `${t.name} @${t.host || "-"}` : t.name);
 
   const topBw = [...topics].sort(
     (a, b) => safeNum(b.bandwidth_mib_per_sec) - safeNum(a.bandwidth_mib_per_sec)
@@ -512,26 +592,47 @@ function updateSummary() {
   aliveCount.textContent = String(alive);
   badCount.textContent = String(bad);
   totalBandwidth.textContent = `${format(bw)} MiB/s`;
-  topTopic.textContent = topBw ? `${topBw.name} (${format(topBw.bandwidth_mib_per_sec)} MiB/s)` : "-";
-  topHzTopic.textContent = topHz ? `${topHz.name} (${format(topHz.hz)} Hz)` : "-";
+  topTopic.textContent = topBw ? `${labelOf(topBw)} (${format(topBw.bandwidth_mib_per_sec)} MiB/s)` : "-";
+  topHzTopic.textContent = topHz ? `${labelOf(topHz)} (${format(topHz.hz)} Hz)` : "-";
   generatedAt.textContent = state.stats.generated_at_sec
     ? new Date(Number(state.stats.generated_at_sec) * 1000).toLocaleString()
     : "-";
+}
+
+function updateHostBar() {
+  const hosts = state.stats.hosts || [];
+  const online = hosts.filter((h) => h.online).length;
+  if (hostCount) hostCount.textContent = `${online} / ${hosts.length}`;
+  if (!hostBar) return;
+  if (!hosts.length) {
+    hostBar.innerHTML = '<span class="host-bar-empty">No agent has reported yet.</span>';
+    return;
+  }
+  hostBar.innerHTML = hosts.map((h) => `
+    <div class="host-chip${h.online ? "" : " offline"}" title="${escapeHtml(`${h.agent_node || "-"} | ${h.rmw || "-"} | locality_mode=${h.locality_mode || "-"} | subscribe_policy=${h.subscribe_policy || "-"}`)}">
+      <i class="dot ${h.online ? "ok" : "offline"}"></i>
+      <span class="host-chip-name mono">${escapeHtml(h.host)}</span>
+      <span class="host-chip-meta">${h.online ? "online" : "offline"}</span>
+      <span class="host-chip-meta">${safeNum(h.monitored_topic_count, 0)} measured</span>
+      <span class="host-chip-meta">${format(h.last_seen_age_sec, 1)} s ago</span>
+    </div>
+  `).join("");
 }
 
 function updateTable() {
   const topics = getFilteredTopics();
 
   if (!topics.length) {
-    topicsBody.innerHTML = '<tr><td colspan="10" class="empty-cell">No topics matched.</td></tr>';
+    topicsBody.innerHTML = '<tr><td colspan="11" class="empty-cell">No topics matched.</td></tr>';
     return;
   }
 
   topicsBody.innerHTML = topics.map((t) => `
-    <tr>
+    <tr class="${t.host_online === false ? "row-offline" : ""}" title="${escapeHtml(`locality=${t.locality || "-"} local_pub=${safeNum(t.local_publisher_count, 0)} remote_pub=${safeNum(t.remote_publisher_count, 0)}`)}">
       <td>${statusBadge(t)}</td>
-      <td class="mono">${t.name || "-"}</td>
-      <td class="mono">${t.type || "-"}</td>
+      <td class="mono">${escapeHtml(t.host || "-")}</td>
+      <td class="mono">${escapeHtml(t.name || "-")}</td>
+      <td class="mono">${escapeHtml(t.type || "-")}</td>
       <td>${format(t.hz)}</td>
       <td>${format(t.bandwidth_mib_per_sec)}</td>
       <td>${format(t.latest_message_size_mib)}</td>
@@ -546,17 +647,19 @@ function updateTable() {
 function updateCharts() {
   const topics = state.stats.topics || [];
   const nowLabel = new Date().toLocaleTimeString();
-  const topicNameSet = new Set(topics.map((t) => t.name));
+  const chartTopics = topics.filter((t) => t.monitored !== false);
+  const labelSet = new Set(chartTopics.map(seriesLabel));
 
-  pruneDatasets(hzChart, topicNameSet);
-  pruneDatasets(bwChart, topicNameSet);
+  pruneDatasets(hzChart, labelSet);
+  pruneDatasets(bwChart, labelSet);
 
   hzChart.data.labels.push(nowLabel);
   bwChart.data.labels.push(nowLabel);
 
-  topics.forEach((topic) => {
-    ensureDataset(hzChart, topic.name).data.push(safeNum(topic.hz));
-    ensureDataset(bwChart, topic.name).data.push(safeNum(topic.bandwidth_mib_per_sec));
+  chartTopics.forEach((topic) => {
+    const label = seriesLabel(topic);
+    ensureDataset(hzChart, label).data.push(safeNum(topic.hz));
+    ensureDataset(bwChart, label).data.push(safeNum(topic.bandwidth_mib_per_sec));
   });
 
   hzChart.data.datasets.forEach((ds) => {
@@ -748,7 +851,7 @@ function renderGraphNode(layer, node) {
 
   if (node.node_type === "host" || node.node_type === "namespace") {
     g.appendChild(svgEl("rect", {
-      class: "graph-group-box",
+      class: `graph-group-box${node.node_type === "host" && node.status === "down" ? " graph-host-offline" : ""}`,
       rx: 18,
       ry: 18,
       width: node.width,
@@ -759,7 +862,9 @@ function renderGraphNode(layer, node) {
       x: node.width / 2,
       y: 24,
       "text-anchor": "middle"
-    })).textContent = String(node.label || node.id);
+    })).textContent = node.node_type === "host" && node.status === "down"
+      ? `${String(node.label || node.id)} (offline)`
+      : String(node.label || node.id);
   } else if (node.node_type === "node") {
     g.appendChild(svgEl("ellipse", {
       class: "graph-leaf-shape",
@@ -1155,8 +1260,10 @@ async function fetchStatsAndUpdate() {
     state.stats = {
       generated_at_sec: data.generated_at_sec ?? null,
       topic_count: data.topic_count ?? (data.topics || []).length,
+      hosts: data.hosts || [],
       topics: (data.topics || []).map((t) => ({
         ...t,
+        host: t.host || "local",
         bandwidth_mib_per_sec: safeNum(t.bandwidth_mib_per_sec),
         latest_message_size_mib: safeNum(t.latest_message_size_mib),
         hz: safeNum(t.hz)
@@ -1165,13 +1272,14 @@ async function fetchStatsAndUpdate() {
     rebuildTopicRuntimeMap();
 
     updateSummary();
+    updateHostBar();
     updateTable();
     updateCharts();
     refreshGraphRuntimeVisuals();
     updateGraphStats();
   } catch (err) {
     topicsBody.innerHTML =
-      `<tr><td colspan="10" class="empty-cell">Failed to fetch stats: ${err}</td></tr>`;
+      `<tr><td colspan="11" class="empty-cell">Failed to fetch stats: ${escapeHtml(err)}</td></tr>`;
   }
 }
 

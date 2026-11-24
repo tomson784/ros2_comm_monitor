@@ -4,9 +4,12 @@
 #include <rclcpp/version.h>
 #include <std_msgs/msg/string.hpp>
 
+#include "serialized_topic_monitor/locality.hpp"
+
 #include <cstdint>
 #include <deque>
 #include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -138,37 +141,87 @@ private:
 };
 
 /**
- * @brief Main ROS node that scans topics and publishes stats/graph JSON.
+ * @brief Where the publishers of a topic live relative to this agent's host.
+ */
+enum class TopicLocality
+{
+  kLocal,   // all publishers on this host -> measured
+  kMixed,   // publishers on this host and on other hosts -> reported, measured only if any_local
+  kOrphan,  // no publisher anywhere, but a subscriber on this host -> reported as DOWN
+  kRemote,  // publishers only on other hosts -> not reported (that host's agent reports it)
+  kNone     // no publisher and no local subscriber -> not reported
+};
+
+/**
+ * @brief Per-topic endpoint snapshot taken at scan time and reused by stats/graph builders.
+ *
+ * Endpoints belonging to monitor tooling (agents / web servers) are already excluded.
+ */
+struct TopicEndpointCache
+{
+  std::string type;
+  TopicLocality locality{TopicLocality::kNone};
+  bool monitored{false};
+  std::size_t publisher_count{0U};
+  std::size_t subscriber_count{0U};
+  std::size_t local_publisher_count{0U};
+  std::size_t remote_publisher_count{0U};
+  std::vector<rclcpp::TopicEndpointInfo> local_publishers;
+  std::vector<rclcpp::TopicEndpointInfo> local_subscribers;
+
+  /// True when this agent includes the topic in its stats payload.
+  bool reported() const
+  {
+    return locality == TopicLocality::kLocal ||
+           locality == TopicLocality::kMixed ||
+           locality == TopicLocality::kOrphan;
+  }
+};
+
+/**
+ * @brief Main ROS node (agent) that scans topics and publishes stats/graph JSON.
+ *
+ * In a multi-host setup one agent runs per host. Each agent only subscribes to
+ * topics whose publishers live on its own host, so topic payloads never cross
+ * the network for monitoring purposes; only the small JSON payloads do.
  */
 class TopicHzMonitorWebNode : public rclcpp::Node
 {
 public:
-  TopicHzMonitorWebNode();
+  explicit TopicHzMonitorWebNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 private:
   void load_parameters();
   void update_topics();
   void publish_payloads();
+  void init_locality();
+  void refresh_tool_nodes();
 
   bool should_monitor_topic(const std::string & topic_name) const;
-  bool should_include_graph_node(
-    const std::string & node_namespace,
-    const std::string & node_name) const;
+  bool is_tool_endpoint(const rclcpp::TopicEndpointInfo & info) const;
+  bool is_local_endpoint(const rclcpp::TopicEndpointInfo & info) const;
   bool is_internal_topic(const std::string & topic_name) const;
   bool is_hidden_topic(const std::string & topic_name) const;
+  TopicStats make_topic_stats(
+    const std::string & topic_name,
+    const TopicEndpointCache & cache,
+    const rclcpp::Time & now) const;
 
   static std::unordered_set<std::string> to_set(const std::vector<std::string> & input);
   static double bytes_to_mib(double bytes);
   static std::string json_escape(const std::string & value);
   static std::string make_node_fqn(const std::string & node_namespace, const std::string & node_name);
   static std::string make_namespace_cluster_id(const std::string & host, const std::string & node_namespace);
+  static std::string make_graph_node_id(const std::string & host, const std::string & node_fqn);
   static std::string reliability_to_string(int policy_value);
   static std::string durability_to_string(int policy_value);
   static std::string history_to_string(int policy_value);
   static std::string liveliness_to_string(int policy_value);
   static double duration_to_seconds(const rclcpp::Duration & d);
   static std::string topic_status_to_string(const TopicStats & stats);
+  static std::string locality_to_string(TopicLocality locality);
   static std::string get_hostname();
+  static bool env_forces_localhost();
 
   std::string build_stats_json() const;
   GraphData build_graph_data() const;
@@ -180,6 +233,8 @@ private:
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr graph_publisher_;
 
   std::unordered_map<std::string, std::shared_ptr<TopicMonitor>> monitors_;
+  std::map<std::string, TopicEndpointCache> topic_cache_;
+  std::unordered_set<std::string> tool_node_fqns_;
 
   std::vector<std::string> allowlist_;
   std::vector<std::string> denylist_;
@@ -196,6 +251,18 @@ private:
 
   std::string stats_topic_{"/topic_monitor/stats_json"};
   std::string graph_topic_{"/topic_monitor/graph_json"};
+
+  // Distributed monitoring / locality.
+  std::string host_name_;
+  std::string locality_mode_{"auto"};          // auto | all
+  std::string subscribe_policy_{"local_only"};  // local_only | any_local
+  std::vector<std::string> local_node_namespaces_;
+  std::vector<std::string> local_node_names_;
+  bool env_localhost_only_{false};
+  bool gid_locality_available_{false};
+  locality::GidBytes self_gid_;
+  std::string rmw_identifier_;
+  std::string agent_node_fqn_;
 };
 
 }  // namespace serialized_topic_monitor
