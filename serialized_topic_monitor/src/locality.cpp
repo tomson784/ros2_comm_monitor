@@ -44,6 +44,22 @@ std::string gid_host_tag(const GidBytes & gid)
   return std::string(buf);
 }
 
+std::string gid_participant_prefix(const GidBytes & gid)
+{
+  constexpr std::size_t kGuidPrefixSize = 12U;
+  if (gid.size() < kGuidPrefixSize) {
+    return "";
+  }
+  std::string out;
+  out.reserve(kGuidPrefixSize * 2U);
+  char buf[9];
+  for (std::size_t i = 0U; i < kGuidPrefixSize; ++i) {
+    std::snprintf(buf, sizeof(buf), "%02x", static_cast<unsigned int>(gid[i]));
+    out += buf;
+  }
+  return out;
+}
+
 bool matches_pattern(const std::string & pattern, const std::string & value)
 {
   if (pattern.empty()) {

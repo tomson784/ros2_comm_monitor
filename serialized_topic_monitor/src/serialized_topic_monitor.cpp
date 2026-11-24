@@ -371,20 +371,47 @@ void TopicHzMonitorWebNode::init_locality()
 void TopicHzMonitorWebNode::refresh_tool_nodes()
 {
   tool_node_fqns_.clear();
+  tool_participant_prefixes_.clear();
   tool_node_fqns_.insert(agent_node_fqn_);
+
+  auto add = [this](const rclcpp::TopicEndpointInfo & info) {
+      if (is_unknown_node_name(info)) {
+        // Node names of remote participants can be unknown (e.g. Humble <-> Jazzy,
+        // whose ros_discovery_info is incompatible). Never register the placeholder
+        // name, or every unknown endpoint would be dropped; remember the DDS
+        // participant (process) instead.
+        const auto prefix =
+          locality::gid_participant_prefix(locality::to_gid_bytes(info.endpoint_gid()));
+        if (!prefix.empty()) {
+          tool_participant_prefixes_.insert(prefix);
+        }
+        return;
+      }
+      tool_node_fqns_.insert(make_node_fqn(info.node_namespace(), info.node_name()));
+    };
 
   for (const auto & topic : {stats_topic_, graph_topic_}) {
     for (const auto & info : this->get_publishers_info_by_topic(topic)) {
-      tool_node_fqns_.insert(make_node_fqn(info.node_namespace(), info.node_name()));
+      add(info);
     }
     for (const auto & info : this->get_subscriptions_info_by_topic(topic)) {
-      tool_node_fqns_.insert(make_node_fqn(info.node_namespace(), info.node_name()));
+      add(info);
     }
   }
 }
 
+bool TopicHzMonitorWebNode::is_unknown_node_name(const rclcpp::TopicEndpointInfo & info)
+{
+  return info.node_name().empty() || info.node_name() == "_NODE_NAME_UNKNOWN_";
+}
+
 bool TopicHzMonitorWebNode::is_tool_endpoint(const rclcpp::TopicEndpointInfo & info) const
 {
+  if (is_unknown_node_name(info)) {
+    return !tool_participant_prefixes_.empty() &&
+           tool_participant_prefixes_.count(
+      locality::gid_participant_prefix(locality::to_gid_bytes(info.endpoint_gid()))) > 0U;
+  }
   return tool_node_fqns_.count(make_node_fqn(info.node_namespace(), info.node_name())) > 0U;
 }
 

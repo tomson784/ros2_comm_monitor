@@ -222,6 +222,7 @@ private:
   static std::string locality_to_string(TopicLocality locality);
   static std::string get_hostname();
   static bool env_forces_localhost();
+  static bool is_unknown_node_name(const rclcpp::TopicEndpointInfo & info);
 
   std::string build_stats_json() const;
   GraphData build_graph_data() const;
@@ -235,6 +236,7 @@ private:
   std::unordered_map<std::string, std::shared_ptr<TopicMonitor>> monitors_;
   std::map<std::string, TopicEndpointCache> topic_cache_;
   std::unordered_set<std::string> tool_node_fqns_;
+  std::unordered_set<std::string> tool_participant_prefixes_;  // for endpoints with unknown names
 
   std::vector<std::string> allowlist_;
   std::vector<std::string> denylist_;

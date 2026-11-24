@@ -107,3 +107,26 @@ TEST(LocalityTest, PatternMatching)
   EXPECT_FALSE(loc::matches_any_pattern({"/a", "/b*"}, "/c"));
   EXPECT_FALSE(loc::matches_any_pattern({}, "/a"));
 }
+
+TEST(LocalityTest, ParticipantPrefix)
+{
+  // Intent: endpoints of one participant share bytes 0..11 regardless of entity id
+  // and of the GID storage size (16 bytes on Jazzy, 24 on Humble).
+  auto writer = make_fastdds_gid(0x12, 0x34, 7);
+  auto reader = writer;
+  reader[12] = 0x00;
+  reader[13] = 0x00;
+  reader[14] = 0x16;
+  reader[15] = 0x04;
+  EXPECT_EQ(loc::gid_participant_prefix(writer), "010f12340700000001000000");
+  EXPECT_EQ(loc::gid_participant_prefix(writer), loc::gid_participant_prefix(reader));
+
+  auto humble = writer;
+  humble.resize(24U, 0x00);
+  EXPECT_EQ(loc::gid_participant_prefix(humble), loc::gid_participant_prefix(writer));
+
+  EXPECT_NE(
+    loc::gid_participant_prefix(make_fastdds_gid(0x12, 0x34, 8)),
+    loc::gid_participant_prefix(writer));
+  EXPECT_EQ(loc::gid_participant_prefix(loc::GidBytes(11U, 0x01)), "");
+}

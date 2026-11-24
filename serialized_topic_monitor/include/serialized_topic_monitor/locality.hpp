@@ -66,6 +66,14 @@ HostRelation compare_host(const GidBytes & self_gid, const GidBytes & other_gid)
 std::string gid_host_tag(const GidBytes & gid);
 
 /**
+ * @brief Hex string of the DDS participant part of a GID (RTPS GUID prefix, bytes 0..11).
+ *
+ * Endpoints of the same participant (= ROS context, normally one process) share it.
+ * Returns an empty string when the GID is shorter than 12 bytes.
+ */
+std::string gid_participant_prefix(const GidBytes & gid);
+
+/**
  * @brief Match a value against a name pattern.
  *
  * A pattern ending in '*' is a prefix match, otherwise an exact match.

@@ -328,6 +328,23 @@ colcon test --packages-select serialized_topic_monitor topic_monitor_web_server
 colcon test-result --verbose
 ```
 
+### 複数端末テスト（Docker）
+
+`test/multihost/` は docker compose で 3 台の PC を模擬します。独立した bridge ネットワーク上で、
+コンテナごとにネットワーク名前空間・hostname・`/etc/machine-id`・`/dev/shm` が分かれます。
+
+- `master`（Jazzy）: web server と agent。`/a_chatter` を publish、`/b_chatter` を subscribe
+- `host_b`（Jazzy）: agent。`/big`（200 KiB × 10 Hz）と `/b_chatter` を publish
+- `host_c`（Humble）: agent。`/c_chatter` を publish、`/a_chatter` を subscribe
+
+```bash
+test/multihost/run_test.sh   # 終了コード 0 なら全チェック成功。結果は test/multihost/results/
+```
+
+ホストごとの計測とグラフ上の所属、`locality_mode:=auto` と `all` でのマスターの受信量の差、
+停止したホストが offline になることを確認します。
+sudo なしで Docker を使えること、`ros:jazzy-ros-base-noble` / `ros:humble-ros-base-jammy` イメージが必要です（なければ自動で取得されます）。
+
 ## 実装メモ
 
 - 帯域はシリアライズ済みメッセージサイズから推定しています。
@@ -341,5 +358,6 @@ colcon test-result --verbose
 - 自動判定（`locality_mode:=auto`）は Fast DDS のみ対応です。GUID 中の 16 bit のホスト ID を使うため、まれに別 PC 間で衝突することがあります。その場合は `local_node_*` の明示設定か `locality_mode:=all` を使ってください。
 - `mixed` トピック（publisher が複数 PC にある）は、既定の `subscribe_policy:=local_only` では計測しません（NOT MEASURED として報告）。
 - ホストを判定できないエンドポイント（agent と異なる RMW のノードなど）は、`local_node_namespaces` / `local_node_names` に一致しない限り自 PC 扱いになりません。
+- ディストリビューションの混在（Humble と Jazzy の agent など）: データと JSON は通常どおり届きますが、`ros_discovery_info` の互換性がないため、相手側のノード名は `_NODE_NAME_UNKNOWN_` になります。agent は相手側の監視ツールを名前ではなく DDS participant で識別します。各 agent は自 PC のノードだけを出力するので、集約後のグラフには影響しません。なお ROS 2 はディストリビューション間の通信を公式にはサポートしていません。
 - QoS は graph API から得られる情報に依存し、複雑なネットワークでは見え方に差が出る場合があります。
 - 本パッケージは通信状態監視が目的で、メッセージ内容の意味的妥当性検証は行いません。

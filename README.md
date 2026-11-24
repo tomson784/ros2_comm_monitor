@@ -330,6 +330,23 @@ colcon test --packages-select serialized_topic_monitor topic_monitor_web_server
 colcon test-result --verbose
 ```
 
+### Multi-host test (Docker)
+
+`test/multihost/` simulates three PCs with docker compose on an isolated bridge network
+(each container has its own network namespace, hostname, `/etc/machine-id` and `/dev/shm`):
+
+- `master` (Jazzy): web server + agent, publishes `/a_chatter`, subscribes `/b_chatter`
+- `host_b` (Jazzy): agent, publishes `/big` (200 KiB x 10 Hz) and `/b_chatter`
+- `host_c` (Humble): agent, publishes `/c_chatter`, subscribes `/a_chatter`
+
+```bash
+test/multihost/run_test.sh   # exit code 0 = all checks passed; results in test/multihost/results/
+```
+
+It checks per-host measurement and graph placement, the master's received traffic with
+`locality_mode:=auto` vs `all`, and that a stopped host turns offline.
+Docker must be usable without sudo, and the `ros:jazzy-ros-base-noble` / `ros:humble-ros-base-jammy` images must be available (pulled automatically if missing).
+
 ## Design Notes
 
 - Bandwidth is estimated from serialized message sizes observed at subscription callback time.
@@ -343,5 +360,6 @@ colcon test-result --verbose
 - Automatic host detection (`locality_mode:=auto`) works with Fast DDS only. It relies on the 16-bit host id in the GUID, which can (rarely) collide between two PCs; use `host_name` / `local_node_*` or `locality_mode:=all` if that happens.
 - `mixed` topics (publishers on several PCs) are not measured with the default `subscribe_policy:=local_only`; they are reported as NOT MEASURED.
 - Endpoints whose host cannot be determined (e.g. nodes using a different RMW than the agent) are not treated as local unless matched by `local_node_namespaces` / `local_node_names`.
+- Mixing ROS distributions (e.g. Humble and Jazzy agents): data and JSON flow normally, but each side sees the other's node names as `_NODE_NAME_UNKNOWN_` (incompatible `ros_discovery_info`). Agents then identify the other side's monitor tooling by DDS participant instead of by name; since each agent only emits its own host's nodes, the merged graph is unaffected. ROS 2 does not officially support cross-distro communication.
 - QoS metadata is derived from discovered publisher/subscriber info; mismatches may exist in complex networks.
 - This package focuses on monitoring transport-level behavior, not semantic message validity.
