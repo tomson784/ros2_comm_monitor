@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="200" viewBox="0 0 1200 200" font-family="'Noto Sans JP','Noto Sans CJK JP','Hiragino Sans','Yu Gothic','Meiryo',Inter,'Segoe UI',sans-serif" role="img" aria-label="host state transitions">
+<defs><marker id="ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker></defs>
+<rect width="1200" height="200" rx="18" fill="#f8fafc"/>
+<circle cx="50" cy="100" r="10" fill="#334155"/>
+<line x1="62" y1="100" x2="146" y2="100" stroke="#334155" stroke-width="2.5" marker-end="url(#ah2)"/>
+<text x="104" y="88" text-anchor="middle" font-size="12.5" fill="#334155">JSON received</text>
+<rect x="150" y="66" width="200" height="68" rx="34" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5"/>
+<text x="250.0" y="106" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">online</text>
+<text x="250.0" y="162" text-anchor="middle" font-size="12.5" fill="#475569">rows shown normally</text>
+<path d="M215,66 C215,16 285,16 285,62" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#ah2)"/>
+<text x="250" y="26" text-anchor="middle" font-size="12.5" fill="#334155">JSON received</text>
+<rect x="620" y="66" width="200" height="68" rx="34" fill="#fee2e2" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="7 5"/>
+<text x="720.0" y="106" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">offline</text>
+<text x="720.0" y="162" text-anchor="middle" font-size="12.5" fill="#475569">rows stale / HOST OFFLINE, host node down</text>
+<line x1="352" y1="88" x2="614" y2="88" stroke="#334155" stroke-width="2.5" marker-end="url(#ah2)"/>
+<text x="484" y="78" text-anchor="middle" font-size="12.5" fill="#334155">nothing for agent_timeout_sec (default 5 s)</text>
+<line x1="618" y1="112" x2="356" y2="112" stroke="#334155" stroke-width="2.5" marker-end="url(#ah2)"/>
+<text x="484" y="132" text-anchor="middle" font-size="12.5" fill="#334155">JSON received</text>
+<line x1="822" y1="100" x2="986" y2="100" stroke="#334155" stroke-width="2.5" marker-end="url(#ah2)"/>
+<text x="904" y="88" text-anchor="middle" font-size="12" fill="#334155">nothing for forget_after_sec</text>
+<text x="904" y="122" text-anchor="middle" font-size="12" fill="#334155">(default 300 s)</text>
+<circle cx="1010" cy="100" r="14" fill="none" stroke="#334155" stroke-width="2.5"/><circle cx="1010" cy="100" r="8" fill="#334155"/>
+<text x="1034" y="105" font-size="14" font-weight="700" fill="#0f172a">removed from list</text>
+</svg>

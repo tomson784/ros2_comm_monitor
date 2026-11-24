@@ -13,32 +13,7 @@
 
 ## 1. 全体像
 
-```mermaid
-flowchart LR
-  subgraph A["PC A（master）"]
-    direction TB
-    a_nodes["ユーザーノード<br/>(/a_chatter など)"]
-    agentA["agent<br/>comm_monitor_agent_host_a"]
-    web["web server<br/>topic_monitor_web_server<br/>(ClusterState)"]
-    a_nodes -- "データ本体<br/>(PC 内だけ)" --> agentA
-  end
-  subgraph B["PC B"]
-    direction TB
-    b_nodes["ユーザーノード<br/>(/big など)"]
-    agentB["agent<br/>comm_monitor_agent_host_b"]
-    b_nodes -- "データ本体<br/>(PC 内だけ)" --> agentB
-  end
-  subgraph C["PC C"]
-    direction TB
-    c_nodes["ユーザーノード"]
-    agentC["agent<br/>comm_monitor_agent_host_c"]
-    c_nodes -- "データ本体<br/>(PC 内だけ)" --> agentC
-  end
-  agentA -- "stats / graph JSON" --> web
-  agentB -- "stats / graph JSON<br/>(数 KiB/s)" --> web
-  agentC -- "stats / graph JSON" --> web
-  web -- "HTTP<br/>/api/stats /api/graph /api/hosts" --> browser["ブラウザ"]
-```
+![全体像](./images/architecture.ja.svg)
 
 設計の要点は次の 3 つです。
 
@@ -81,17 +56,7 @@ flowchart LR
 agent は `scan_period_ms`（既定 1 秒）ごとに ROS グラフを走査し、結果をキャッシュします。
 stats / graph JSON は、このキャッシュから `report_period_ms`（既定 1 秒）ごとに生成します。
 
-```mermaid
-flowchart TD
-  s0["get_topic_names_and_types()"] --> s1["allowlist / denylist / hidden / internal で絞り込み"]
-  s1 --> s2["各トピックの publisher / subscriber の endpoint 情報を取得"]
-  s2 --> s3{"監視ツール自身の<br/>endpoint か？"}
-  s3 -- はい --> skip["件数とグラフから除外"]
-  s3 -- いいえ --> s4{"自 PC の endpoint か？"}
-  s4 --> s5["トピックを分類<br/>local / mixed / orphan / remote"]
-  s5 --> s6["subscribe の作成・削除"]
-  s6 --> cache["endpoint キャッシュ<br/>(stats / graph の生成に再利用)"]
-```
+![エージェントの処理の流れ](./images/agent_scan.ja.svg)
 
 ### 3.1 「自 PC か」の判定順
 
@@ -144,14 +109,7 @@ stats / graph トピックを publish または subscribe しているノード�
 
 ### 4.1 ホストの状態
 
-```mermaid
-stateDiagram-v2
-  [*] --> online: JSON を受信
-  online --> online: JSON を受信
-  online --> offline: agent_timeout_sec（既定 5 秒）受信なし
-  offline --> online: JSON を受信
-  offline --> [*]: forget_after_sec（既定 300 秒）受信なし → 一覧から削除
-```
+![ホストの状態遷移](./images/host_state.ja.svg)
 
 ### 4.2 マージのルール
 

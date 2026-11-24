@@ -13,32 +13,7 @@ All screenshots were captured with `test/multihost/demo_screenshots.sh`
 
 ## 1. Architecture
 
-```mermaid
-flowchart LR
-  subgraph A["PC A (master)"]
-    direction TB
-    a_nodes["user nodes<br/>(/a_chatter, ...)"]
-    agentA["agent<br/>comm_monitor_agent_host_a"]
-    web["web server<br/>topic_monitor_web_server<br/>(ClusterState)"]
-    a_nodes -- "payloads<br/>(inside the PC only)" --> agentA
-  end
-  subgraph B["PC B"]
-    direction TB
-    b_nodes["user nodes<br/>(/big, ...)"]
-    agentB["agent<br/>comm_monitor_agent_host_b"]
-    b_nodes -- "payloads<br/>(inside the PC only)" --> agentB
-  end
-  subgraph C["PC C"]
-    direction TB
-    c_nodes["user nodes"]
-    agentC["agent<br/>comm_monitor_agent_host_c"]
-    c_nodes -- "payloads<br/>(inside the PC only)" --> agentC
-  end
-  agentA -- "stats / graph JSON" --> web
-  agentB -- "stats / graph JSON<br/>(a few KiB/s)" --> web
-  agentC -- "stats / graph JSON" --> web
-  web -- "HTTP<br/>/api/stats /api/graph /api/hosts" --> browser["browser"]
-```
+![Architecture](./images/architecture.svg)
 
 The three key ideas:
 
@@ -81,17 +56,7 @@ Main source files:
 Every `scan_period_ms` (default 1 s) the agent walks the ROS graph and caches the result.
 Stats / graph JSON are generated from that cache every `report_period_ms` (default 1 s).
 
-```mermaid
-flowchart TD
-  s0["get_topic_names_and_types()"] --> s1["filter: allowlist / denylist / hidden / internal"]
-  s1 --> s2["get publisher / subscriber endpoint info per topic"]
-  s2 --> s3{"endpoint of the<br/>monitor itself?"}
-  s3 -- yes --> skip["exclude from counts and graph"]
-  s3 -- no --> s4{"endpoint on this PC?"}
-  s4 --> s5["classify topic<br/>local / mixed / orphan / remote"]
-  s5 --> s6["create / drop subscriptions"]
-  s6 --> cache["endpoint cache<br/>(reused for stats / graph)"]
-```
+![Agent scan flow](./images/agent_scan.svg)
 
 ### 3.1 "Is this endpoint on this PC?"
 
@@ -144,14 +109,7 @@ legacy payloads without it become `local`). The clock is injectable; tests use a
 
 ### 4.1 Host state
 
-```mermaid
-stateDiagram-v2
-  [*] --> online: JSON received
-  online --> online: JSON received
-  online --> offline: nothing for agent_timeout_sec (default 5 s)
-  offline --> online: JSON received
-  offline --> [*]: nothing for forget_after_sec (default 300 s) -> removed
-```
+![Host state transitions](./images/host_state.svg)
 
 ### 4.2 Merge rules
 

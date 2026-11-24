@@ -231,15 +231,7 @@ When ROS nodes are spread over several PCs, run one **agent** per PC and one **m
 
 ### How it works
 
-```text
- PC A (master)                         PC B                        PC C
- ┌───────────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐
- │ agent A ─ measures topics │   │ agent B ─ measures   │   │ agent C ─ measures   │
- │           published on A  │   │   topics published   │   │   topics published   │
- │ web server ◀── stats/graph JSON ─┤   on B             │   │   on C               │
- │   (merges all hosts)      │◀──────────────────────────────── stats/graph JSON    │
- └───────────────────────────┘   └──────────────────────┘   └──────────────────────┘
-```
+![Architecture](./docs/images/architecture.svg)
 
 - Topic payloads are measured **only on the PC that publishes them**; agents never subscribe to a
   topic whose publishers live on another PC, so no payload crosses the network for monitoring.
