@@ -25,17 +25,21 @@ CI は `main` ブランチに対して ROS 2 Humble / Jazzy の matrix build を
 
 ## ダッシュボード画面
 
+3 台の PC（Docker で模擬）を 1 つの画面で監視している例です。
+各画面の見方、システム全体の構成、判定とマージのルールは
+**[システム概要（docs/system_overview.ja.md）](./docs/system_overview.ja.md)** にまとめています。
+
 ### Topic Monitor
 
-![Topic monitor dashboard](./docs/topic_dashboard.png)
+![Topic monitor dashboard](./docs/screenshots/ui_topics.png)
 
 ### Chart Monitor
 
-![Chart monitor dashboard](./docs/chart_dashborad.png)
+![Chart monitor dashboard](./docs/screenshots/ui_charts.png)
 
 ### Graph Monitor
 
-![Graph monitor dashboard](./docs/graph_dashborad.png)
+![Graph monitor dashboard](./docs/screenshots/ui_graph.png)
 
 ## 特徴
 
@@ -314,7 +318,8 @@ ros2 launch ros2_comm_monitor agent.launch.py local_node_namespaces:="['/robot1*
 - `/api/stats`: (host, topic) ごとに 1 行。offline の PC の行は `stale=true`, `host_online=false`。
   `hosts`, `host_count`, `online_host_count` も含みます。
 - `/api/graph`: 全ホストのノードとエッジの和集合。複数ホストが報告するトピックは良いほうの status
-  （`ok > stale > down > neutral`）を採用。host ノードは online なら `ok`、offline なら `down`。
+  （`ok > stale > down > neutral`）を採用。ただし online のホストの判定を、offline のホストの古いデータより優先します
+  （詳細は [システム概要](./docs/system_overview.ja.md#42-マージのルール)）。host ノードは online なら `ok`、offline なら `down`。
 - `/api/hosts`: ホストごとの `online`, `last_seen_age_sec`, `agent_node`, `rmw`, `locality_mode`,
   `subscribe_policy`, `topic_count`, `monitored_topic_count`。
 
@@ -338,8 +343,11 @@ colcon test-result --verbose
 - `host_c`（Humble）: agent。`/c_chatter` を publish、`/a_chatter` を subscribe
 
 ```bash
-test/multihost/run_test.sh   # 終了コード 0 なら全チェック成功。結果は test/multihost/results/
+test/multihost/run_test.sh          # 終了コード 0 なら全チェック成功。結果は test/multihost/results/
+test/multihost/demo_screenshots.sh  # デモ用トピックを足して UI のスクリーンショットを docs/screenshots/ に撮影（Python Playwright が必要）
 ```
+
+実行中のマスターの UI は `http://127.0.0.1:18090` で開けます（`MASTER_HTTP_PORT` で変更可）。
 
 ホストごとの計測とグラフ上の所属、`locality_mode:=auto` と `all` でのマスターの受信量の差、
 停止したホストが offline になることを確認します。

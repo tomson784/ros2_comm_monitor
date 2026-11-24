@@ -25,6 +25,19 @@ LEGACY_HOST = "local"
 _TOPIC_STATUS_RANK = {"ok": 3, "stale": 2, "down": 1, "neutral": 0}
 
 
+def topic_status_key(status: Any, host_online: bool) -> int:
+    """Sort key for choosing a topic's merged status (higher wins).
+
+    A judgement from an online host (ok / stale / down) beats anything an offline
+    host last reported, which in turn beats "neutral" (not measured).
+    Within each tier: ok > stale > down.
+    """
+    rank = _TOPIC_STATUS_RANK.get(status, 0)
+    if rank == 0:
+        return 0
+    return rank + (10 if host_online else 5)
+
+
 class _HostEntry:
     """Latest payloads and receive times for one agent host."""
 
@@ -195,11 +208,17 @@ class ClusterState:
         }
 
     def get_merged_graph(self) -> Dict[str, Any]:
-        """Union per-host graphs; topic status takes the best (ok > stale > down > neutral)."""
+        """Union per-host graphs.
+
+        Topic status: the best of the hosts' statuses (ok > stale > down > neutral),
+        where online hosts' judgements take precedence over offline hosts' (see
+        ``topic_status_key``).
+        """
         with self._lock:
             now = self._clock()
             self._prune_locked(now)
             nodes: Dict[str, Dict[str, Any]] = {}
+            topic_keys: Dict[str, int] = {}
             edges: Dict[str, Dict[str, Any]] = {}
             for host in sorted(self._hosts):
                 entry = self._hosts[host]
@@ -217,13 +236,13 @@ class ClusterState:
                         # Data from an offline agent cannot vouch for a healthy topic.
                         node["status"] = "stale"
                     existing = nodes.get(node["id"])
+                    key = topic_status_key(node.get("status"), host_online)
                     if existing is None:
                         nodes[node["id"]] = node
-                    elif node_type == "topic":
-                        new_rank = _TOPIC_STATUS_RANK.get(node.get("status"), 0)
-                        old_rank = _TOPIC_STATUS_RANK.get(existing.get("status"), 0)
-                        if new_rank > old_rank:
-                            existing["status"] = node.get("status")
+                        topic_keys[node["id"]] = key
+                    elif node_type == "topic" and key > topic_keys.get(node["id"], 0):
+                        existing["status"] = node.get("status")
+                        topic_keys[node["id"]] = key
                 for edge in entry.graph.get("edges") or []:
                     if isinstance(edge, dict) and edge.get("id") and edge["id"] not in edges:
                         edges[edge["id"]] = dict(edge)

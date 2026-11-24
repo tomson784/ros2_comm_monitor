@@ -26,17 +26,21 @@ Each badge points to the same matrix workflow, so a failure in either distro mar
 
 ## Dashboard Screenshots
 
+Three PCs (simulated with Docker) monitored from one dashboard.
+How to read each screen, the overall architecture, and the classification / merge rules are described in
+**[System Overview (docs/system_overview.md)](./docs/system_overview.md)**.
+
 ### Topic Monitor
 
-![Topic monitor dashboard](./docs/topic_dashboard.png)
+![Topic monitor dashboard](./docs/screenshots/ui_topics.png)
 
 ### Chart Monitor
 
-![Chart monitor dashboard](./docs/chart_dashborad.png)
+![Chart monitor dashboard](./docs/screenshots/ui_charts.png)
 
 ### Graph Monitor
 
-![Graph monitor dashboard](./docs/graph_dashborad.png)
+![Graph monitor dashboard](./docs/screenshots/ui_graph.png)
 
 ## Features
 
@@ -316,7 +320,8 @@ ros2 launch ros2_comm_monitor agent.launch.py local_node_namespaces:="['/robot1*
 - `/api/stats`: one row per (host, topic). Rows of offline hosts have `stale=true`, `host_online=false`.
   Also contains `hosts`, `host_count`, `online_host_count`.
 - `/api/graph`: union of all hosts' nodes and edges. A topic reported by several hosts takes the best
-  status (`ok > stale > down > neutral`). Host nodes are `ok` when online, `down` when offline.
+  status (`ok > stale > down > neutral`), with online hosts' judgements taking precedence over offline hosts'
+  last data (see [System Overview](./docs/system_overview.md#42-merge-rules)). Host nodes are `ok` when online, `down` when offline.
 - `/api/hosts`: per-host `online`, `last_seen_age_sec`, `agent_node`, `rmw`, `locality_mode`,
   `subscribe_policy`, `topic_count`, `monitored_topic_count`.
 
@@ -340,8 +345,11 @@ colcon test-result --verbose
 - `host_c` (Humble): agent, publishes `/c_chatter`, subscribes `/a_chatter`
 
 ```bash
-test/multihost/run_test.sh   # exit code 0 = all checks passed; results in test/multihost/results/
+test/multihost/run_test.sh          # exit code 0 = all checks passed; results in test/multihost/results/
+test/multihost/demo_screenshots.sh  # adds demo topics and captures UI screenshots into docs/screenshots/ (needs Python Playwright)
 ```
+
+While the stack is running, the master UI is at `http://127.0.0.1:18090` (change with `MASTER_HTTP_PORT`).
 
 It checks per-host measurement and graph placement, the master's received traffic with
 `locality_mode:=auto` vs `all`, and that a stopped host turns offline.

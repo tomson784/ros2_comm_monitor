@@ -311,3 +311,23 @@ def test_http_handler_serves_hosts_api():
     assert hosts["pc_a"]["rmw"] == "rmw_fastrtps_cpp"
     assert hosts["pc_b"]["online"] is True
     assert hosts["pc_b"]["has_graph"] is False
+
+
+def test_cluster_graph_prefers_online_hosts_over_offline_data():
+    # Intent: an offline host's last report must not override a live host's judgement.
+    # /b: publisher host pc_b went offline (ok -> stale), pc_a (online) sees no publisher -> down.
+    # /m: not measured anywhere -> stays neutral even if the offline host reported it.
+    # /big: only the offline host knows it -> stale beats a live host's neutral.
+    clock = FakeClock()
+    state = ClusterState(agent_timeout_sec=5.0, clock=clock)
+    state.set_latest_graph_json(_graph("pc_b", [
+        _topic_node("/b", "ok"), _topic_node("/m", "neutral"), _topic_node("/big", "ok")]))
+    clock.advance(6.0)
+    state.set_latest_graph_json(_graph("pc_a", [
+        _topic_node("/b", "down"), _topic_node("/m", "neutral"), _topic_node("/big", "neutral")]))
+
+    nodes = {n["id"]: n for n in state.get_merged_graph()["nodes"]}
+    assert nodes["host://pc_b"]["status"] == "down"
+    assert nodes["/b"]["status"] == "down"
+    assert nodes["/m"]["status"] == "neutral"
+    assert nodes["/big"]["status"] == "stale"

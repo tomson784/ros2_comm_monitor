@@ -101,13 +101,21 @@ function escapeHtml(value) {
 // Graph status of a stats row: ok | stale | down | neutral.
 function topicStatusFromTopic(topic) {
   if (!topic || topic.alive === undefined) return "neutral";
+  if (topic.monitored === false && topic.alive) return "neutral";
   const status = rowStatus(topic);
   if (status === "offline") return topic.alive ? "stale" : "down";
-  if (status === "unmeasured") return "neutral";
   return status;
 }
 
 const GRAPH_STATUS_RANK = { ok: 3, stale: 2, down: 1, neutral: 0 };
+
+// Same precedence as the server-side graph merge (topic_status_key):
+// online host's ok/stale/down > offline host's ok/stale/down > neutral.
+function topicStatusKey(topic) {
+  const rank = GRAPH_STATUS_RANK[topicStatusFromTopic(topic)] ?? 0;
+  if (rank === 0) return 0;
+  return rank + (topic.host_online === false ? 5 : 10);
+}
 
 function graphStatusBadge(status) {
   if (status === "down") return '<span class="badge badge-bad">DOWN</span>';
@@ -118,7 +126,7 @@ function graphStatusBadge(status) {
 
 // Keep topic runtime values in O(1) lookup map for graph hover/details.
 // One topic can be reported by several hosts; the graph shows the best status
-// (ok > stale > down > neutral), matching the server-side graph merge.
+// (see topicStatusKey), matching the server-side graph merge.
 function rebuildTopicRuntimeMap() {
   const rowsByName = new Map();
   const bestByName = new Map();
@@ -126,9 +134,7 @@ function rebuildTopicRuntimeMap() {
     if (!rowsByName.has(t.name)) rowsByName.set(t.name, []);
     rowsByName.get(t.name).push(t);
     const current = bestByName.get(t.name);
-    const rank = GRAPH_STATUS_RANK[topicStatusFromTopic(t)] ?? 0;
-    const currentRank = current ? (GRAPH_STATUS_RANK[topicStatusFromTopic(current)] ?? 0) : -1;
-    if (rank > currentRank) bestByName.set(t.name, t);
+    if (!current || topicStatusKey(t) > topicStatusKey(current)) bestByName.set(t.name, t);
   });
   state.topicRowsByName = rowsByName;
   state.topicRuntimeByName = bestByName;
